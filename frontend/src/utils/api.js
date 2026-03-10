@@ -63,6 +63,14 @@ export const api = {
   parseScreenshot: (base64Image) => MOCK_MODE
     ? new Promise(r => setTimeout(() => r({ screen_time_day: +(1.5 + Math.random()*3).toFixed(1) }), 1200))
     : request('POST', '/api/parse-screenshot', { image: base64Image }),
+
+  // User feedback — adjusts fuzzy thresholds per user (backend feature)
+  // type: 'explanation' | 'prediction' | 'simulation'
+  // value: 'helpful' | 'not_helpful'
+  // When backend is live: POST /api/feedback → stored in Supabase → adjusts per-user fuzzy thresholds
+  feedback: (d) => MOCK_MODE
+    ? Promise.resolve({ message: 'Feedback recorded (mock)' })
+    : request('POST', '/api/feedback', d),
 }
 
 // Mock explanation mirrors what Mistral-7B would produce
