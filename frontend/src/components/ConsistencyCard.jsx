@@ -1,63 +1,65 @@
-// Behavioral Consistency Score
 // notebook GROUP 3: habit_volatility_index = mean(study_vol3, sleep_vol3, screen_vol3)
-//   where _vol3 = shift(1).rolling(3, min_periods=2).std()
-// consistency = 1 - (hvi / 2.0)  [normalised to 0-1 range]
+// consistency = 1 - (hvi / 2.0)
 export default function ConsistencyCard({ score, logs }) {
   const hasData = score !== null && score !== undefined
   const pct     = hasData ? Math.round(score * 100) : null
-  const color   = !hasData ? '#ffffff20' : pct >= 70 ? '#2DD4BF' : pct >= 45 ? '#F59E0B' : '#F43F5E'
-  const label   = !hasData ? 'Insufficient data' : pct >= 70 ? 'Consistent' : pct >= 45 ? 'Moderate' : 'Volatile'
+  const color   = !hasData ? 'var(--color-muted)' : pct >= 70 ? '#0D9488' : pct >= 45 ? '#D97706' : '#DC2626'
+  const label   = !hasData ? 'No data yet' : pct >= 70 ? 'Consistent' : pct >= 45 ? 'Moderate' : 'Volatile'
   const desc    = !hasData
     ? 'Need 3+ logs to compute rolling habit volatility index.'
-    : pct >= 70
-    ? 'Habit volatility is low. Consistent routines support stable predictions.'
-    : pct >= 45
-    ? 'Some habit variation detected. Stabilising sleep and study hours will help.'
-    : 'High habit volatility. Erratic patterns increase workload pressure risk.'
+    : pct >= 70 ? 'Low habit volatility. Consistent routines support stable predictions.'
+    : pct >= 45 ? 'Some habit variation. Stabilising sleep and study hours will help.'
+    : 'High volatility detected. Erratic patterns increase workload pressure risk.'
 
   return (
-    <div className="card animate-fade-up" style={{animationDelay:'480ms',animationFillMode:'both',opacity:0}}>
-      <p className="section-label mb-3">Behavioral Consistency</p>
-      <div className="flex items-center gap-4 mb-4">
+    <div className="card">
+      <p className="section-label">Behavioral Consistency</p>
+
+      <div style={{display:'flex', alignItems:'center', gap:14, marginTop:8}}>
         {/* Ring */}
-        <div className="relative w-14 h-14 shrink-0">
-          <svg className="w-full h-full -rotate-90" viewBox="0 0 56 56">
-            <circle cx="28" cy="28" r="22" fill="none" stroke="#1C1C27" strokeWidth="6"/>
-            <circle cx="28" cy="28" r="22" fill="none"
-              stroke={color} strokeWidth="6"
-              strokeDasharray={`${((pct||0)/100)*138.2} 138.2`}
-              strokeLinecap="round"
-              style={{transition:'stroke-dasharray 1s ease'}}/>
+        <div style={{position:'relative', width:52, height:52, flexShrink:0}}>
+          <svg width={52} height={52} style={{transform:'rotate(-90deg)'}}>
+            <circle cx={26} cy={26} r={20} fill="none" stroke="var(--color-border)" strokeWidth={5}/>
+            <circle cx={26} cy={26} r={20} fill="none" stroke={color} strokeWidth={5}
+              strokeDasharray={`${((pct||0)/100)*125.7} 125.7`} strokeLinecap="round"
+              style={{transition:'stroke-dasharray 1s cubic-bezier(0.16,1,0.3,1)'}}/>
           </svg>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="font-mono text-xs font-bold" style={{color}}>
+          <div style={{position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:'0.6875rem', fontWeight:700, color}}>
               {hasData ? pct : '?'}
             </span>
           </div>
         </div>
+
         <div>
-          <p className="font-display font-semibold text-lg" style={{color}}>{label}</p>
-          <p className="text-paper/40 text-xs font-body mt-0.5 max-w-[180px]">{desc}</p>
+          <p style={{fontFamily:'Syne,sans-serif', fontWeight:700, fontSize:'1rem', color, lineHeight:1.1}}>{label}</p>
+          <p style={{fontFamily:'DM Sans,sans-serif', fontSize:'0.75rem', color:'var(--color-muted)', marginTop:3, lineHeight:1.45}}>
+            {desc}
+          </p>
         </div>
       </div>
 
-      {/* Sparkline bars — habit stability per log */}
+      {/* Habit stability sparkline */}
       {logs && logs.length >= 3 && (
-        <div className="flex gap-1">
-          {logs.slice(-7).map((l, i) => {
+        <div style={{display:'flex', gap:3, marginTop:12, alignItems:'flex-end', height:28}}>
+          {logs.slice(-8).map((l, i) => {
             const v = l.habit_stability ?? 0.5
-            const c = v > 0.65 ? '#2DD4BF' : v > 0.4 ? '#F59E0B' : '#F43F5E'
+            const c = v > 0.65 ? '#0D9488' : v > 0.4 ? '#D97706' : '#DC2626'
             return (
-              <div key={i} className="flex-1 h-7 rounded flex items-end overflow-hidden bg-ink" title={`habit_stability: ${v.toFixed(3)}`}>
-                <div className="w-full rounded" style={{height:`${Math.max(10,v*100)}%`, background:c, opacity:0.65}}/>
-              </div>
+              <div key={i} title={`habit_stability: ${v.toFixed(3)}`}
+                style={{
+                  flex:1, borderRadius:3,
+                  height: `${Math.max(20, v*100)}%`,
+                  background:c, opacity:0.55,
+                  transition:'height 0.6s cubic-bezier(0.16,1,0.3,1)',
+                }}/>
             )
           })}
         </div>
       )}
 
-      <p className="text-paper/15 text-xs font-mono mt-2">
-        habit_volatility_index = mean(study_vol3, sleep_vol3, screen_vol3) · normalised /2.0
+      <p style={{fontFamily:'JetBrains Mono,monospace', fontSize:'0.6rem', color:'var(--color-muted)', opacity:0.6, marginTop:8}}>
+        HVI = mean(study_vol3, sleep_vol3, screen_vol3) · consistency = 1 − HVI/2.0
       </p>
     </div>
   )
