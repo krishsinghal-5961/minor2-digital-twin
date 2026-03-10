@@ -1,28 +1,33 @@
-export default function ScoreGauge({ score, max = 100, label }) {
-  const pct = Math.min(100, Math.max(0, (score / max) * 100))
-  const color = pct >= 65 ? '#2DD4BF' : pct >= 45 ? '#F59E0B' : '#F43F5E'
-  const r = 52, circ = 2 * Math.PI * r
-  const dash = (pct / 100) * circ
-
+// SVG semi-circle gauge
+export default function ScoreGauge({ score = 0, label = 'Score' }) {
+  const pct   = Math.min(100, Math.max(0, score)) / 100
+  const R     = 60
+  const circ  = Math.PI * R   // semicircle circumference
+  const color = score >= 65 ? '#059669' : score >= 45 ? '#D97706' : '#DC2626'
+  const dash  = pct * circ
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative w-36 h-36">
-        <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-          <circle cx="60" cy="60" r={r} fill="none" stroke="#1C1C27" strokeWidth="10" />
-          <circle
-            cx="60" cy="60" r={r} fill="none"
-            stroke={color} strokeWidth="10"
-            strokeDasharray={`${dash} ${circ}`}
-            strokeLinecap="round"
-            style={{ transition: 'stroke-dasharray 1s ease' }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-display font-bold" style={{ color }}>{score?.toFixed(1)}</span>
-          <span className="text-paper/30 text-xs font-mono">/{max}</span>
-        </div>
-      </div>
-      {label && <p className="section-label mt-2">{label}</p>}
+    <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:0}}>
+      <svg width={160} height={90} viewBox="0 0 160 90">
+        {/* Track */}
+        <path d="M 10,80 A 70,70 0 0,1 150,80" fill="none"
+          stroke="var(--color-border)" strokeWidth={10} strokeLinecap="round"/>
+        {/* Fill */}
+        <path d="M 10,80 A 70,70 0 0,1 150,80" fill="none"
+          stroke={color} strokeWidth={10} strokeLinecap="round"
+          strokeDasharray={`${dash * (140/circ)} 140`}
+          style={{transition:'stroke-dasharray 1.2s cubic-bezier(0.16,1,0.3,1)', transformOrigin:'center'}}/>
+        {/* Score text */}
+        <text x="80" y="72" textAnchor="middle"
+          style={{fontFamily:'Syne,sans-serif', fontWeight:800, fontSize:28, fill:color}}>
+          {Math.round(score)}
+        </text>
+        <text x="80" y="85" textAnchor="middle"
+          style={{fontFamily:'JetBrains Mono,monospace', fontSize:8, fill:'var(--color-muted)'}}>
+          / 100
+        </text>
+      </svg>
+      <p style={{fontFamily:'DM Sans,sans-serif', fontWeight:500, fontSize:'0.75rem',
+                 color:'var(--color-muted)', marginTop:-4}}>{label}</p>
     </div>
   )
 }
