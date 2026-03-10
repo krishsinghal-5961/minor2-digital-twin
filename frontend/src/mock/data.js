@@ -213,17 +213,37 @@ function approxFuzzyAlignment(mismatch, studyHours, pressureScore) {
 }
 
 // ── CLUSTER ASSIGNMENT ────────────────────────────────────────
-// Mirrors notebook cluster_labels (manually fixed):
+// Mirrors notebook cluster_labels (manually fixed cell):
 // 0: Balanced & Efficient, 1: Extracurricular Focused, 2: Overworked & Struggling
-// Uses same 6 features as TIME_FEATURES in Model 2
+// Derived from notebook cluster profile analysis of TIME_FEATURES:
+//   study_hours_day, sleep_hours_day, screen_time_day,
+//   study_efficiency, habit_stability, extra_hours
+//
+// FIX: Low deadlines alone do NOT determine cluster — KMeans doesn't use deadlines.
+// Cluster 2 (Overworked) = high study hours + poor sleep + low stability
+// Cluster 1 (Extracurricular) = high extra_hours (primary) OR high screen + low sleep
+// Cluster 0 (Balanced) = good stability + good efficiency + adequate sleep
 function assignCluster(study, sleep, screen, efficiency, stability, extra) {
-  // Rule derived from notebook profile analysis:
-  // Balanced:        high stability (>0.6), high efficiency (>0.55), ok sleep (>6.5)
-  // Extracurricular: high extra (>3) OR high screen+low sleep
-  // Overworked:      rest (high study, poor sleep, low stability)
-  if (stability > 0.6 && efficiency > 0.55 && sleep > 6.5) return 'Balanced & Efficient'
-  if (extra > 3.0 || (screen > 3.5 && sleep < 6.5))        return 'Extracurricular Focused'
-  return 'Overworked & Struggling'
+  // Score each cluster centroid distance (simplified Euclidean on scaled features)
+  // Centroids derived from notebook profile table (approximate):
+  // Balanced:        study~5.5, sleep~7.2, screen~2.5, eff~0.62, stab~0.72, extra~1.2
+  // Extracurricular: study~5.8, sleep~6.3, screen~3.8, eff~0.55, stab~0.50, extra~4.1
+  // Overworked:      study~7.5, sleep~5.5, screen~3.2, eff~0.48, stab~0.35, extra~1.8
+  const centroids = {
+    'Balanced & Efficient'    : [5.5, 7.2, 2.5, 0.62, 0.72, 1.2],
+    'Extracurricular Focused' : [5.8, 6.3, 3.8, 0.55, 0.50, 4.1],
+    'Overworked & Struggling' : [7.5, 5.5, 3.2, 0.48, 0.35, 1.8],
+  }
+  // Scale factors (approximate std of each feature from dataset)
+  const scales = [1.8, 1.1, 1.5, 0.12, 0.18, 1.4]
+  const point  = [study, sleep, screen, efficiency, stability, extra]
+
+  let best = null, bestDist = Infinity
+  for (const [label, c] of Object.entries(centroids)) {
+    const dist = Math.sqrt(c.reduce((s, cv, i) => s + ((point[i]-cv)/scales[i])**2, 0))
+    if (dist < bestDist) { bestDist = dist; best = label }
+  }
+  return best
 }
 
 // ── BEHAVIORAL CONSISTENCY SCORE ─────────────────────────────
