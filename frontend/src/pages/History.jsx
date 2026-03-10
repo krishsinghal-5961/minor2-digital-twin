@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../utils/api'
 import RiskBadge from '../components/RiskBadge'
 import RiskRadar from '../components/RiskRadar'
+import { useTheme } from '../hooks/useTheme.jsx'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend, ReferenceLine
@@ -14,7 +15,7 @@ const TT = ({ active, payload, label }) => {
       background:'var(--color-card)', border:'1px solid var(--color-border)',
       borderRadius:10, padding:'10px 14px',
       fontFamily:'JetBrains Mono,monospace', fontSize:11,
-      boxShadow:'0 4px 20px rgba(0,0,0,0.12)',
+      boxShadow:'0 4px 20px rgba(0,0,0,0.15)',
     }}>
       <p style={{color:'var(--color-muted)', marginBottom:6}}>{label}</p>
       {payload.map(p => (
@@ -25,9 +26,6 @@ const TT = ({ active, payload, label }) => {
     </div>
   )
 }
-
-const tickStyle = { fill:'#9490FF', fontSize:10, fontFamily:'JetBrains Mono,monospace', opacity:0.55 }
-const gridStroke = 'rgba(91,79,232,0.07)'
 
 const TABS = [
   { key:'performance', label:'Performance',      lines:[{key:'Performance',     color:'#5B4FE8'}] },
@@ -42,6 +40,10 @@ const TABS = [
 ]
 
 export default function History() {
+  const { dark }  = useTheme()
+  const tickFill  = dark ? 'rgba(148,144,255,0.6)' : 'rgba(80,70,140,0.55)'
+  const tickStyle = { fill: tickFill, fontSize:10, fontFamily:'JetBrains Mono,monospace' }
+  const gridStroke = dark ? 'rgba(91,79,232,0.08)' : 'rgba(91,79,232,0.06)'
   const [data,    setData]    = useState(null)
   const [radar,   setRadar]   = useState(null)
   const [loading, setLoading] = useState(true)
