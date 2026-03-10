@@ -72,11 +72,11 @@ export default function Analytics() {
         </p>
       </div>
 
-      {/* Risk Radar + Feature cards — FIX: use auto+1fr so radar doesn't stretch cards */}
-      <div style={{display:'grid', gridTemplateColumns:'auto 1fr', gap:16, alignItems:'start'}}>
+      {/* Risk Radar + Feature cards — fixed 260px left column so it never collapses */}
+      <div style={{display:'grid', gridTemplateColumns:'260px 1fr', gap:16, alignItems:'start'}}>
 
-        {/* Radar card — fixed width, doesn't stretch */}
-        <div className="card" style={{width:280}}>
+        {/* Radar card — fixed width */}
+        <div className="card">
           <p className="section-label">Risk Radar</p>
           <p style={{fontFamily:'DM Sans,sans-serif', fontSize:'0.75rem', color:'var(--color-muted)', margin:'4px 0 12px', lineHeight:1.5}}>
             Trend slopes from notebook GROUP 2 (slope3) + GROUP 4 (pressure_momentum)
