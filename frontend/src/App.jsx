@@ -10,13 +10,15 @@ import LogEntry   from './pages/LogEntry'
 import Settings   from './pages/Settings'
 import Analytics  from './pages/Analytics'
 import SimHistory from './pages/SimHistory'
+import ExportPDF  from './pages/ExportPDF'
 import Layout     from './components/Layout'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return (
-    <div className="min-h-screen bg-ink flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"/>
+    <div style={{minHeight:'100vh',background:'var(--color-surface)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{width:28,height:28,borderRadius:'50%',border:'2.5px solid rgba(91,79,232,0.15)',borderTopColor:'#5B4FE8',animation:'spin 0.7s linear infinite'}}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
   return user ? children : <Navigate to="/login" replace/>
@@ -35,6 +37,7 @@ function AppRoutes() {
         <Route path="log"           element={<LogEntry/>}/>
         <Route path="analytics"     element={<Analytics/>}/>
         <Route path="sim-history"   element={<SimHistory/>}/>
+        <Route path="export"        element={<ExportPDF/>}/>
         <Route path="settings"      element={<Settings/>}/>
       </Route>
     </Routes>
