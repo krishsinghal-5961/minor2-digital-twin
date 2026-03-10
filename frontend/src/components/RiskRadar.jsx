@@ -12,9 +12,16 @@ function toPath(pts) {
 
 export default function RiskRadar({ data }) {
   if (!data) return (
-    <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:140,
-                 fontFamily:'JetBrains Mono,monospace', fontSize:'0.75rem', color:'var(--color-muted)', textAlign:'center'}}>
-      3+ logs needed<br/>to compute risk radar
+    <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+                 minHeight:180, gap:8, padding:'1rem 0'}}>
+      <div style={{width:40, height:40, borderRadius:'50%', border:'1px dashed var(--color-border)',
+                   display:'flex', alignItems:'center', justifyContent:'center'}}>
+        <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:'1rem', color:'var(--color-muted)', opacity:0.4}}>?</span>
+      </div>
+      <p style={{fontFamily:'JetBrains Mono,monospace', fontSize:'0.7rem', color:'var(--color-muted)',
+                 textAlign:'center', lineHeight:1.5, opacity:0.7}}>
+        3+ logs needed<br/>to compute risk radar
+      </p>
     </div>
   )
   const { axes, pressure_momentum, performance_momentum, weeks_used } = data
