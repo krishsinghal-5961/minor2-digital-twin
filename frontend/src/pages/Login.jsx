@@ -1,77 +1,76 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import ThemeToggle from '../components/ThemeToggle'
 import { Cpu, Eye, EyeOff } from 'lucide-react'
 
 export default function Login() {
   const { login }   = useAuth()
   const navigate    = useNavigate()
-  const [form, setForm]   = useState({ email:'', password:'' })
-  const [error, setError] = useState('')
+  const [form, setForm] = useState({ email:'', password:'' })
+  const [show, setShow] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [show, setShow]   = useState(false)
+  const [error,   setError]   = useState('')
 
   const handle = async (e) => {
-    e.preventDefault()
-    setLoading(true); setError('')
-    try {
-      await login(form)
-      navigate('/app')
-    } catch(err) {
-      setError(err.message)
-    } finally { setLoading(false) }
+    e.preventDefault(); setLoading(true); setError('')
+    try { await login(form); navigate('/app') }
+    catch(err) { setError(err.message) }
+    finally { setLoading(false) }
   }
 
   return (
-    <div className="min-h-screen bg-ink flex items-center justify-center px-4">
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-10%] right-[20%] w-[500px] h-[500px] bg-accent/6 rounded-full blur-[100px]" />
-      </div>
-
-      <div className="relative z-10 w-full max-w-md">
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-accent/20 flex items-center justify-center">
-              <Cpu size={18} className="text-accent" />
-            </div>
-            <span className="font-display font-bold text-paper">Academic Digital Twin</span>
+    <div style={{minHeight:'100vh', background:'var(--color-surface)', display:'flex', flexDirection:'column'}}>
+      <nav style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'1rem 1.5rem', borderBottom:'1px solid var(--color-border)'}}>
+        <Link to="/" style={{display:'flex', alignItems:'center', gap:8, textDecoration:'none'}}>
+          <div style={{width:28, height:28, borderRadius:7, background:'rgba(91,79,232,0.1)', display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <Cpu size={13} color="#5B4FE8"/>
           </div>
-        </div>
+          <span style={{fontFamily:'Syne,sans-serif', fontWeight:700, fontSize:'0.875rem', color:'var(--color-paper)'}}>Digital Twin</span>
+        </Link>
+        <ThemeToggle compact/>
+      </nav>
 
-        <div className="card">
-          <h1 className="font-display font-bold text-2xl text-paper mb-1">Welcome back</h1>
-          <p className="text-paper/40 font-body text-sm mb-8">Sign in to your account</p>
+      <div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'2rem 1rem'}}>
+        <div style={{width:'100%', maxWidth:380}}>
+          <div style={{textAlign:'center', marginBottom:28}}>
+            <h1 style={{fontFamily:'Syne,sans-serif', fontWeight:800, fontSize:'1.625rem', color:'var(--color-paper)'}}>Welcome back</h1>
+            <p style={{fontFamily:'DM Sans,sans-serif', fontSize:'0.875rem', color:'var(--color-muted)', marginTop:6}}>Sign in to your digital twin</p>
+          </div>
 
-          {error && (
-            <div className="bg-risk-high/10 border border-risk-high/20 rounded-xl px-4 py-3 mb-5">
-              <p className="text-risk-high text-sm">{error}</p>
-            </div>
-          )}
-
-          <form onSubmit={handle} className="space-y-4">
-            <div>
-              <label className="section-label block mb-1.5">Email</label>
-              <input type="email" placeholder="you@example.com" className="input-field"
-                value={form.email} onChange={e => setForm(f => ({...f, email:e.target.value}))} required />
-            </div>
-            <div>
-              <label className="section-label block mb-1.5">Password</label>
-              <div className="relative">
-                <input type={show?'text':'password'} placeholder="••••••••" className="input-field pr-12"
-                  value={form.password} onChange={e => setForm(f => ({...f, password:e.target.value}))} required />
-                <button type="button" onClick={() => setShow(s=>!s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-paper/30 hover:text-paper/60">
-                  {show ? <EyeOff size={16}/> : <Eye size={16}/>}
-                </button>
+          <div className="card">
+            {error && (
+              <div style={{padding:'10px 14px', background:'rgba(220,38,38,0.06)', border:'1px solid rgba(220,38,38,0.2)', borderRadius:8, marginBottom:16}}>
+                <p style={{fontFamily:'DM Sans,sans-serif', fontSize:'0.8rem', color:'#DC2626'}}>{error}</p>
               </div>
-            </div>
-            <button type="submit" disabled={loading} className="btn-primary w-full mt-2 disabled:opacity-50">
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </form>
+            )}
+            <form onSubmit={handle} style={{display:'flex', flexDirection:'column', gap:14}}>
+              <div>
+                <label className="section-label">Email</label>
+                <input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}
+                  placeholder="you@example.com" className="input-field" required/>
+              </div>
+              <div>
+                <label className="section-label">Password</label>
+                <div style={{position:'relative'}}>
+                  <input type={show?'text':'password'} value={form.password}
+                    onChange={e=>setForm(f=>({...f,password:e.target.value}))}
+                    placeholder="••••••••" className="input-field" required style={{paddingRight:40}}/>
+                  <button type="button" onClick={()=>setShow(s=>!s)}
+                    style={{position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', color:'var(--color-muted)'}}>
+                    {show ? <EyeOff size={14}/> : <Eye size={14}/>}
+                  </button>
+                </div>
+              </div>
+              <button type="submit" disabled={loading} className="btn-primary" style={{width:'100%', marginTop:4}}>
+                {loading ? 'Signing in...' : 'Sign in'}
+              </button>
+            </form>
+          </div>
 
-          <p className="text-center text-paper/30 text-sm font-body mt-6">
-            No account? <Link to="/register" className="text-accent hover:text-accent-soft transition-colors">Create one</Link>
+          <p style={{textAlign:'center', fontFamily:'DM Sans,sans-serif', fontSize:'0.8rem', color:'var(--color-muted)', marginTop:20}}>
+            No account?{' '}
+            <Link to="/register" style={{color:'#5B4FE8', textDecoration:'none', fontWeight:500}}>Create one</Link>
           </p>
         </div>
       </div>
