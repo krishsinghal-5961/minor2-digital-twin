@@ -1,10 +1,16 @@
-import { AlertTriangle } from 'lucide-react'
+import { Info } from 'lucide-react'
 export default function ConfidenceNote({ note }) {
   if (!note) return null
   return (
-    <div className="flex items-start gap-3 bg-risk-medium/5 border border-risk-medium/20 rounded-xl px-4 py-3 mb-6">
-      <AlertTriangle size={15} className="text-risk-medium mt-0.5 shrink-0" />
-      <p className="text-risk-medium/80 text-sm font-body">{note}</p>
+    <div style={{
+      display:'flex', alignItems:'flex-start', gap:10,
+      padding:'10px 14px',
+      background:'rgba(217,119,6,0.06)',
+      border:'1px solid rgba(217,119,6,0.2)',
+      borderRadius:10,
+    }}>
+      <Info size={13} style={{color:'#D97706', marginTop:1, flexShrink:0}}/>
+      <p style={{fontFamily:'DM Sans,sans-serif', fontSize:'0.8rem', color:'#D97706', lineHeight:1.5}}>{note}</p>
     </div>
   )
 }
