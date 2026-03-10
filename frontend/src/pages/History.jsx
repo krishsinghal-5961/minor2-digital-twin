@@ -118,7 +118,7 @@ export default function History() {
         </div>
 
         {/* Chart + Radar */}
-        <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:16}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 240px',gap:16}}>
           <div className="card">
             {/* Tab bar */}
             <div style={{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap'}}>
