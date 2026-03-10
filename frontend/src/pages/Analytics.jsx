@@ -34,16 +34,203 @@ const Spinner = () => (
   </div>
 )
 
+// ── LIVE STAT CARDS ───────────────────────────────────────────────────────────
+// Computes 4 personalised stats from the user's actual log history.
+// Replaces the old static "Top Feature / 2nd Feature" model-info cards.
+
+function LiveStatCards({ logs, latest }) {
+  if (!logs || !latest) return (
+    <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12}}>
+      {[1,2,3,4].map(i => (
+        <div key={i} className="card" style={{padding:'16px 18px', minHeight:100}}>
+          <div className="skeleton" style={{height:10, width:'50%', marginBottom:12}}/>
+          <div className="skeleton" style={{height:22, width:'70%', marginBottom:8}}/>
+          <div className="skeleton" style={{height:8,  width:'90%'}}/>
+        </div>
+      ))}
+    </div>
+  )
+
+  // ── 1. Average Performance ─────────────────────────────────────────────────
+  const avgPerf   = logs.reduce((s,l) => s + l.performance_score, 0) / logs.length
+  const lastPerf  = latest.performance_score
+  const perfDelta = +(lastPerf - avgPerf).toFixed(1)
+  const perfColor = perfDelta >= 0 ? '#059669' : '#DC2626'
+
+  // ── 2. Top Risk Factor ─────────────────────────────────────────────────────
+  // Score each risk factor: higher score = worse.
+  // Sleep: below 7h is risky. Screen: above 3h is risky. Deadlines: above 3 is risky.
+  const riskFactors = [
+    {
+      name: 'Low Sleep',
+      score: Math.max(0, 7 - latest.sleep_hours_day),
+      val: `${latest.sleep_hours_day}h / night`,
+      note: latest.sleep_hours_day >= 7
+        ? `${latest.sleep_hours_day}h — within healthy range`
+        : `${(7 - latest.sleep_hours_day).toFixed(1)}h below 7h threshold`,
+      color: latest.sleep_hours_day >= 7 ? '#059669' : latest.sleep_hours_day >= 6 ? '#D97706' : '#DC2626',
+    },
+    {
+      name: 'High Screen Time',
+      score: Math.max(0, latest.screen_time_day - 3),
+      val: `${latest.screen_time_day}h / day`,
+      note: latest.screen_time_day <= 3
+        ? `${latest.screen_time_day}h — within safe range`
+        : `${(latest.screen_time_day - 3).toFixed(1)}h above 3h threshold`,
+      color: latest.screen_time_day <= 2 ? '#059669' : latest.screen_time_day <= 4 ? '#D97706' : '#DC2626',
+    },
+    {
+      name: 'Deadline Pressure',
+      score: Math.max(0, latest.deadline_count - 3),
+      val: `${latest.deadline_count} deadlines`,
+      note: latest.deadline_count <= 3
+        ? `${latest.deadline_count} — manageable this period`
+        : `${latest.deadline_count - 3} above comfortable threshold`,
+      color: latest.deadline_count <= 2 ? '#059669' : latest.deadline_count <= 4 ? '#D97706' : '#DC2626',
+    },
+    {
+      name: 'Late Night Study',
+      score: latest.late_night_ratio * 3,
+      val: `${Math.round(latest.late_night_ratio * 100)}% sessions`,
+      note: latest.late_night_ratio < 0.2
+        ? 'Minimal late-night study — good'
+        : `Reduces study_efficiency by ~${(latest.late_night_ratio * 30).toFixed(0)}%`,
+      color: latest.late_night_ratio < 0.2 ? '#059669' : latest.late_night_ratio < 0.5 ? '#D97706' : '#DC2626',
+    },
+  ]
+  const topRisk = riskFactors.sort((a,b) => b.score - a.score)[0]
+
+  // ── 3. Consistency Streak ─────────────────────────────────────────────────
+  // Count consecutive recent logs where habit_stability > 0.5
+  let streak = 0
+  for (let i = logs.length - 1; i >= 0; i--) {
+    if ((logs[i].habit_stability ?? 0) >= 0.5) streak++
+    else break
+  }
+  const avgStability = logs.reduce((s,l) => s + (l.habit_stability ?? 0), 0) / logs.length
+  const streakColor  = streak >= 5 ? '#059669' : streak >= 2 ? '#D97706' : '#DC2626'
+
+  // ── 4. Study Efficiency ───────────────────────────────────────────────────
+  const avgEff    = logs.reduce((s,l) => s + (l.study_efficiency ?? 0), 0) / logs.length
+  const currEff   = latest.study_efficiency ?? 0
+  const effDelta  = +(currEff - avgEff).toFixed(3)
+  const effColor  = currEff >= 0.6 ? '#059669' : currEff >= 0.4 ? '#D97706' : '#DC2626'
+  // Main drag on efficiency
+  const effDrag   = latest.late_night_ratio > 0.4
+    ? 'Late-night sessions reducing score'
+    : currEff < avgEff
+    ? 'Below your personal average'
+    : 'Above your personal average'
+
+  const cards = [
+    {
+      label    : 'Avg Performance',
+      value    : avgPerf.toFixed(1),
+      unit     : '/ 100',
+      sub      : perfDelta === 0 ? 'Holding steady'
+        : `${perfDelta > 0 ? '▲' : '▼'} ${Math.abs(perfDelta)} vs your avg`,
+      subColor : perfColor,
+      color    : perfDelta >= 0 ? '#5B4FE8' : '#DC2626',
+      bar      : avgPerf / 100,
+      barColor : '#5B4FE8',
+      note     : `Across ${logs.length} log${logs.length !== 1 ? 's' : ''}`,
+    },
+    {
+      label    : 'Top Risk Factor',
+      value    : topRisk.name,
+      unit     : '',
+      sub      : topRisk.val,
+      subColor : topRisk.color,
+      color    : topRisk.color,
+      bar      : Math.min(1, topRisk.score / 4),
+      barColor : topRisk.color,
+      note     : topRisk.note,
+    },
+    {
+      label    : 'Consistency Streak',
+      value    : `${streak}`,
+      unit     : ` log${streak !== 1 ? 's' : ''}`,
+      sub      : streak === 0 ? 'Last log was volatile'
+        : streak >= logs.length ? 'All logs consistent!'
+        : `${streak} of ${logs.length} recent logs stable`,
+      subColor : streakColor,
+      color    : streakColor,
+      bar      : streak / Math.max(logs.length, 1),
+      barColor : streakColor,
+      note     : `habit_stability ≥ 0.5 · avg ${avgStability.toFixed(2)}`,
+    },
+    {
+      label    : 'Study Efficiency',
+      value    : currEff.toFixed(2),
+      unit     : '',
+      sub      : `${effDelta >= 0 ? '+' : ''}${effDelta.toFixed(3)} vs your avg`,
+      subColor : effColor,
+      color    : effColor,
+      bar      : Math.min(1, currEff),
+      barColor : effColor,
+      note     : effDrag,
+    },
+  ]
+
+  return (
+    <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12}}>
+      {cards.map(c => (
+        <div key={c.label} className="card-hover" style={{padding:'16px 18px', display:'flex', flexDirection:'column', gap:0}}>
+          <p className="section-label">{c.label}</p>
+
+          {/* Main value */}
+          <div style={{display:'flex', alignItems:'baseline', gap:4, marginTop:6}}>
+            <p style={{fontFamily:'Syne,sans-serif', fontWeight:800, fontSize:'1.5rem', color:c.color, lineHeight:1}}>
+              {c.value}
+            </p>
+            {c.unit && (
+              <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:'0.65rem', color:'var(--color-muted)'}}>
+                {c.unit}
+              </span>
+            )}
+          </div>
+
+          {/* Progress bar */}
+          <div style={{height:4, background:'var(--color-border)', borderRadius:99, overflow:'hidden', margin:'8px 0'}}>
+            <div style={{
+              height:'100%', borderRadius:99,
+              width:`${Math.round(c.bar * 100)}%`,
+              background: c.barColor,
+              transition:'width 1s cubic-bezier(0.16,1,0.3,1)',
+            }}/>
+          </div>
+
+          {/* Sub stat */}
+          <p style={{fontFamily:'JetBrains Mono,monospace', fontSize:'0.7rem', fontWeight:600, color:c.subColor, marginBottom:4}}>
+            {c.sub}
+          </p>
+
+          {/* Note */}
+          <p style={{fontFamily:'DM Sans,sans-serif', fontSize:'0.7rem', color:'var(--color-muted)', lineHeight:1.4, marginTop:'auto', paddingTop:4, opacity:0.8}}>
+            {c.note}
+          </p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function Analytics() {
-  const { dark }  = useTheme()
-  const [dimData, setDimData] = useState(null)
-  const [ablData, setAblData] = useState(null)
-  const [radar,   setRadar]   = useState(null)
-  const [loading, setLoading] = useState(true)
+  const { dark }      = useTheme()
+  const [dimData,    setDimData]   = useState(null)
+  const [ablData,    setAblData]   = useState(null)
+  const [radar,      setRadar]     = useState(null)
+  const [liveData,   setLiveData]  = useState(null)
+  const [loading,    setLoading]   = useState(true)
 
   useEffect(() => {
-    Promise.all([api.diminishing(), api.ablation(), api.riskRadar()])
-      .then(([d,a,r]) => { setDimData(d.curve); setAblData(a.results); setRadar(r) })
+    Promise.all([api.diminishing(), api.ablation(), api.riskRadar(), api.dashboard()])
+      .then(([d,a,r,dash]) => {
+        setDimData(d.curve)
+        setAblData(a.results)
+        setRadar(r)
+        setLiveData(dash)
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -72,42 +259,36 @@ export default function Analytics() {
         </p>
       </div>
 
-      {/* Risk Radar + Feature cards — fixed 260px left column so it never collapses */}
-      <div style={{display:'grid', gridTemplateColumns:'260px 1fr', gap:16, alignItems:'start'}}>
+      {/* Live stat cards row — computed from user's actual logs */}
+      <LiveStatCards logs={liveData?.logs} latest={liveData?.latest}/>
 
-        {/* Radar card — fixed width */}
-        <div className="card">
-          <p className="section-label">Risk Radar</p>
-          <p style={{fontFamily:'DM Sans,sans-serif', fontSize:'0.75rem', color:'var(--color-muted)', margin:'4px 0 12px', lineHeight:1.5}}>
-            Trend slopes from notebook GROUP 2 (slope3) + GROUP 4 (pressure_momentum)
-          </p>
+      {/* Risk Radar — full width so it gets the space it deserves */}
+      <div className="card">
+        <div style={{display:'grid', gridTemplateColumns:'260px 1fr', gap:24, alignItems:'start'}}>
+          <div>
+            <p className="section-label">Risk Radar</p>
+            <p style={{fontFamily:'DM Sans,sans-serif', fontSize:'0.75rem', color:'var(--color-muted)', margin:'6px 0 14px', lineHeight:1.6}}>
+              Trend slopes computed from your last {radar?.weeks_used || '—'} logs.
+              Mirrors notebook GROUP 2 (slope3) + GROUP 4 (pressure_momentum).
+            </p>
+            {radar && (
+              <div style={{display:'flex', flexDirection:'column', gap:8}}>
+                {[
+                  { label:'Pressure trend', val: radar.pressure_momentum,    good:'releasing', bad:'building' },
+                  { label:'Perf trend',     val: radar.performance_momentum, good:'rising',    bad:'declining' },
+                ].map(r => {
+                  const color = r.val === r.good ? '#059669' : r.val === r.bad ? '#DC2626' : 'var(--color-muted)'
+                  return (
+                    <div key={r.label} style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:'0.65rem', color:'var(--color-muted)'}}>{r.label}</span>
+                      <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:'0.7rem', fontWeight:700, color, textTransform:'capitalize'}}>{r.val}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
           <RiskRadar data={radar}/>
-        </div>
-
-        {/* Feature cards — 2×2 grid, aligned to top */}
-        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
-          {[
-            { label:'Top Feature',   value:'Study Hours',      note:'importance 0.3224 — notebook Model 1',              accent:'#5B4FE8' },
-            { label:'2nd Feature',   value:'Study Efficiency', note:'importance 0.2985 — study×(1−ln)/(study+1)',        accent:'#7B72F0' },
-            { label:'3rd Feature',   value:'Deadline Density', note:'importance 0.0880 — deadline_count / 7',            accent:null },
-            { label:'Fuzzy Modules', value:'12 + 24 rules',    note:'Module 1 (pressure) + Module 2 (alignment, v2)',    accent:null },
-          ].map(c => (
-            <div key={c.label} className="card" style={{padding:'16px 18px'}}>
-              <p className="section-label">{c.label}</p>
-              <p style={{
-                fontFamily:'Syne,sans-serif', fontWeight:700, fontSize:'1.125rem', lineHeight:1.2,
-                color: c.accent || 'var(--color-paper)', marginTop:6,
-              }}>
-                {c.value}
-              </p>
-              <p style={{
-                fontFamily:'JetBrains Mono,monospace', fontSize:'0.65rem',
-                color:'var(--color-muted)', marginTop:6, lineHeight:1.5, opacity:0.75,
-              }}>
-                {c.note}
-              </p>
-            </div>
-          ))}
         </div>
       </div>
 
