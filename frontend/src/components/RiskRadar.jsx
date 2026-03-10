@@ -1,117 +1,90 @@
-// Risk Radar — SVG radar chart using trend/slope data
-// Mirrors notebook GROUP 2 (trend slopes) and GROUP 4 (pressure momentum)
-// High value = higher risk on that axis
 import { useMemo } from 'react'
 
-const SIZE   = 220
-const CX     = SIZE / 2
-const CY     = SIZE / 2
-const R      = 85
-const LEVELS = 4
+const SIZE = 210, CX = 105, CY = 105, R = 72, LEVELS = 4
 
-function polar(angle, radius) {
+function polar(angle, r) {
   const a = (angle - 90) * (Math.PI / 180)
-  return { x: CX + radius * Math.cos(a), y: CY + radius * Math.sin(a) }
+  return { x: CX + r * Math.cos(a), y: CY + r * Math.sin(a) }
 }
-
-function toPath(points) {
-  return points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z'
+function toPath(pts) {
+  return pts.map((p,i) => `${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + 'Z'
 }
 
 export default function RiskRadar({ data }) {
   if (!data) return (
-    <div className="flex items-center justify-center h-48 text-paper/20 text-sm font-mono">
-      Need 3+ logs to compute risk radar
+    <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:140,
+                 fontFamily:'JetBrains Mono,monospace', fontSize:'0.75rem', color:'var(--color-muted)', textAlign:'center'}}>
+      3+ logs needed<br/>to compute risk radar
     </div>
   )
-
   const { axes, pressure_momentum, performance_momentum, weeks_used } = data
-  const n = axes.length
+  const n    = axes.length
   const step = 360 / n
 
-  // Grid polygons
-  const gridLines = useMemo(() => Array.from({ length: LEVELS }, (_, l) => {
-    const r = R * ((l + 1) / LEVELS)
-    const pts = axes.map((_, i) => polar(i * step, r))
-    return toPath(pts)
-  }), [axes, step])
+  const gridPaths = useMemo(() => Array.from({length:LEVELS}, (_,l) => {
+    const r = R * ((l+1)/LEVELS)
+    return toPath(axes.map((_,i) => polar(i*step, r)))
+  }), [n, step])
 
-  // Data polygon — value is 0-100 risk score
-  const dataPoints = axes.map((a, i) => polar(i * step, R * (a.value / 100)))
-  const dataPath   = toPath(dataPoints)
+  const dataPts  = axes.map((a,i) => polar(i*step, R*(a.value/100)))
+  const dataPath = toPath(dataPts)
+  const avg      = axes.reduce((s,a) => s+a.value, 0) / n
+  const color    = avg > 62 ? '#DC2626' : avg > 40 ? '#D97706' : '#0D9488'
 
-  // Risk color: average score
-  const avgScore = axes.reduce((s, a) => s + a.value, 0) / n
-  const radarColor = avgScore > 66 ? '#F43F5E' : avgScore > 40 ? '#F59E0B' : '#2DD4BF'
-
-  const momentumColor = (m) =>
-    m === 'building' || m === 'declining' ? 'text-risk-high' : m === 'stable' ? 'text-paper/50' : 'text-risk-low'
+  const mLabel = m => m === 'building' || m === 'declining' ? '#DC2626' : m === 'stable' ? 'var(--color-muted)' : '#0D9488'
 
   return (
     <div>
-      <div className="flex justify-center mb-2">
-        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-          {/* Grid circles */}
-          {gridLines.map((d, i) => (
-            <path key={i} d={d} fill="none" stroke="#ffffff08" strokeWidth="1"/>
-          ))}
-          {/* Axis lines */}
-          {axes.map((_, i) => {
-            const outer = polar(i * step, R)
-            return <line key={i} x1={CX} y1={CY} x2={outer.x} y2={outer.y} stroke="#ffffff10" strokeWidth="1"/>
-          })}
-          {/* Data polygon */}
-          <path d={dataPath} fill={radarColor} fillOpacity="0.15" stroke={radarColor} strokeWidth="2"/>
-          {/* Data points */}
-          {dataPoints.map((p, i) => (
-            <circle key={i} cx={p.x} cy={p.y} r="4" fill={radarColor} fillOpacity="0.8"/>
-          ))}
-          {/* Axis labels */}
-          {axes.map((a, i) => {
-            const labelR = R + 22
-            const pos    = polar(i * step, labelR)
-            return (
-              <text key={i} x={pos.x} y={pos.y}
-                textAnchor="middle" dominantBaseline="middle"
-                fontSize="8" fontFamily="JetBrains Mono" fill="#ffffff40">
-                {a.axis.split(' ').map((word, wi) => (
-                  <tspan key={wi} x={pos.x} dy={wi === 0 ? 0 : 9}>{word}</tspan>
-                ))}
-              </text>
-            )
-          })}
-          {/* Center label */}
-          <text x={CX} y={CY-6} textAnchor="middle" fontSize="12" fontFamily="Space Grotesk" fill={radarColor} fontWeight="bold">
-            {avgScore.toFixed(0)}
-          </text>
-          <text x={CX} y={CY+8} textAnchor="middle" fontSize="7" fontFamily="JetBrains Mono" fill="#ffffff30">
-            risk index
-          </text>
-        </svg>
-      </div>
+      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} style={{display:'block', margin:'0 auto'}}>
+        {/* Grid */}
+        {gridPaths.map((d,i) => <path key={i} d={d} fill="none" stroke="var(--color-border)" strokeWidth={0.75}/>)}
+        {/* Axis lines */}
+        {axes.map((_,i) => {
+          const o = polar(i*step, R)
+          return <line key={i} x1={CX} y1={CY} x2={o.x} y2={o.y} stroke="var(--color-border)" strokeWidth={0.75}/>
+        })}
+        {/* Data fill */}
+        <path d={dataPath} fill={color} fillOpacity={0.12} stroke={color} strokeWidth={1.75}/>
+        {/* Data dots */}
+        {dataPts.map((p,i) => <circle key={i} cx={p.x} cy={p.y} r={3.5} fill={color} fillOpacity={0.75}/>)}
+        {/* Labels */}
+        {axes.map((a,i) => {
+          const pos = polar(i*step, R+20)
+          const words = a.axis.split(' ')
+          return (
+            <text key={i} x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="middle">
+              {words.map((w,wi) => (
+                <tspan key={wi} x={pos.x} dy={wi===0 ? (words.length>1?-4:0) : 10}
+                  style={{fontFamily:'JetBrains Mono,monospace', fontSize:7, fill:'var(--color-muted)'}}>
+                  {w}
+                </tspan>
+              ))}
+            </text>
+          )
+        })}
+        {/* Center */}
+        <text x={CX} y={CY-5} textAnchor="middle"
+          style={{fontFamily:'Syne,sans-serif', fontWeight:800, fontSize:18, fill:color}}>
+          {avg.toFixed(0)}
+        </text>
+        <text x={CX} y={CY+8} textAnchor="middle"
+          style={{fontFamily:'JetBrains Mono,monospace', fontSize:7, fill:'var(--color-muted)'}}>
+          risk idx
+        </text>
+      </svg>
 
-      {/* Momentum badges */}
-      <div className="flex justify-center gap-4 flex-wrap">
-        <div className="text-center">
-          <p className="text-paper/20 text-xs font-mono mb-0.5">Pressure</p>
-          <p className={`text-xs font-mono font-semibold capitalize ${momentumColor(pressure_momentum)}`}>
-            {pressure_momentum}
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-paper/20 text-xs font-mono mb-0.5">Performance</p>
-          <p className={`text-xs font-mono font-semibold capitalize ${momentumColor(performance_momentum)}`}>
-            {performance_momentum}
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-paper/20 text-xs font-mono mb-0.5">Window</p>
-          <p className="text-xs font-mono text-paper/40">{weeks_used} logs</p>
+      <div style={{display:'flex', justifyContent:'center', gap:20, marginTop:8, flexWrap:'wrap'}}>
+        {[['Pressure', pressure_momentum], ['Perf', performance_momentum]].map(([k,m]) => (
+          <div key={k} style={{textAlign:'center'}}>
+            <p style={{fontFamily:'JetBrains Mono,monospace', fontSize:'0.6rem', color:'var(--color-muted)', marginBottom:2}}>{k}</p>
+            <p style={{fontFamily:'JetBrains Mono,monospace', fontSize:'0.7rem', fontWeight:600, textTransform:'capitalize', color:mLabel(m)}}>{m}</p>
+          </div>
+        ))}
+        <div style={{textAlign:'center'}}>
+          <p style={{fontFamily:'JetBrains Mono,monospace', fontSize:'0.6rem', color:'var(--color-muted)', marginBottom:2}}>Window</p>
+          <p style={{fontFamily:'JetBrains Mono,monospace', fontSize:'0.7rem', color:'var(--color-muted)'}}>{weeks_used} logs</p>
         </div>
       </div>
-      <p className="text-paper/15 text-xs font-mono text-center mt-3">
-        Based on notebook GROUP 2 slopes + GROUP 4 pressure momentum
-      </p>
     </div>
   )
 }
