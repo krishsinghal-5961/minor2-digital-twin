@@ -35,8 +35,18 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('adt_user')
   }
 
+  // Call this after a successful settings save so goal/name changes
+  // are reflected immediately across the whole app (LogEntry reads user.goal)
+  const updateUser = (patch) => {
+    setUser(prev => {
+      const updated = { ...prev, ...patch }
+      localStorage.setItem('adt_user', JSON.stringify(updated))
+      return updated
+    })
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   )
