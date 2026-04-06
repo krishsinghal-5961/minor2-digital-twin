@@ -18,5 +18,5 @@ services:
         value: 3.11.0
       - key: FLASK_ENV
         value: production
-      - key: HF_API_KEY
+      - key: MISTRAL_API_KEY
         sync: false
