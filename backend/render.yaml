@@ -2,8 +2,11 @@ services:
   - type: web
     name: academic-digital-twin-api
     env: python
+    region: oregon
+    plan: free
+    rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --timeout 120
+    startCommand: gunicorn app:app --workers 2 --timeout 120 --bind 0.0.0.0:$PORT
     envVars:
       - key: SUPABASE_URL
         sync: false
@@ -13,3 +16,7 @@ services:
         sync: false
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: FLASK_ENV
+        value: production
+      - key: HF_API_KEY
+        sync: false
