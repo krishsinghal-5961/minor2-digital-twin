@@ -24,14 +24,31 @@ app = Flask(__name__)
 app.secret_key        = os.environ.get("SECRET_KEY", "fallback-dev-key")
 app.permanent_session_lifetime = timedelta(days=7)
 
-CORS(app, supports_credentials=True,
-     origins=["http://localhost:3000",
-              "https://your-app.vercel.app"])  # update after Vercel deploy
+# ── CORS ──────────────────────────────────────────────────────
+# ALLOWED_ORIGINS env var: comma-separated list of allowed origins.
+# Defaults to localhost:3000 for local dev.
+_raw_origins = os.environ.get(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:5173"
+)
+ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
+CORS(app, supports_credentials=True, origins=ALLOWED_ORIGINS)
 
 # ── SUPABASE ──────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError(
+        "Missing required environment variables: SUPABASE_URL and/or "
+        "SUPABASE_SERVICE_KEY. Set them in Render's Environment tab."
+    )
+
+try:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+except Exception as exc:
+    raise RuntimeError(f"Failed to initialise Supabase client: {exc}") from exc
 
 # ── PATHS ─────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -721,7 +738,7 @@ def health():
 #   if __name__ == "__main__":
 # ============================================================
 
-from scipy.stats import linregress   # already imported via engineer_features
+# scipy.stats.linregress is already imported inside engineer_features()
 
 
 # ============================================================
@@ -1091,13 +1108,14 @@ def explain():
     sleep   = body.get("sleep_hours_day", 7)
     screen  = body.get("screen_time_day", 3)
 
-    # Try Anthropic API if key is available
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
-    if anthropic_key:
+    # Try HuggingFace Inference API (Mistral-7B-Instruct-v0.3)
+    hf_key = os.environ.get("HF_API_KEY")
+    if hf_key:
         try:
             import requests as req
+            # Mistral instruct format: [INST] ... [/INST]
             prompt = (
-                f"You are an academic coach. A student has the following weekly metrics:\n"
+                f"[INST] You are an academic coach. A student has the following weekly metrics:\n"
                 f"- Predicted performance score: {perf}/100\n"
                 f"- Workload pressure: {pressure}\n"
                 f"- Goal alignment: {align}\n"
@@ -1105,25 +1123,31 @@ def explain():
                 f"- Study hours/day: {study}h, Sleep: {sleep}h, Screen time: {screen}h\n\n"
                 f"Write a concise 3-sentence personalised insight for this student. "
                 f"Be specific, actionable, and encouraging. "
-                f"End with: 'These are simulations only, not prescriptions or diagnoses.'"
+                f"End with: 'These are simulations only, not prescriptions or diagnoses.' [/INST]"
             )
             resp = req.post(
-                "https://api.anthropic.com/v1/messages",
+                "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
                 headers={
-                    "x-api-key": anthropic_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
+                    "Authorization": f"Bearer {hf_key}",
+                    "Content-Type": "application/json",
                 },
                 json={
-                    "model": "claude-haiku-4-5-20251001",
-                    "max_tokens": 300,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "inputs": prompt,
+                    "parameters": {
+                        "max_new_tokens": 300,
+                        "temperature": 0.7,
+                        "return_full_text": False,
+                    },
                 },
-                timeout=15,
+                timeout=30,
             )
             if resp.status_code == 200:
-                explanation = resp.json()["content"][0]["text"].strip()
-                return jsonify({"explanation": explanation, "source": "claude"})
+                data = resp.json()
+                # HF returns a list: [{"generated_text": "..."}]
+                if isinstance(data, list) and data:
+                    explanation = data[0].get("generated_text", "").strip()
+                    if explanation:
+                        return jsonify({"explanation": explanation, "source": "mistral-7b"})
         except Exception:
             pass  # Fall through to rule-based
 
