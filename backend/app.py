@@ -548,7 +548,8 @@ def log_entry():
         "fuzzy_pressure_label" : predictions.get("fuzzy_pressure_label"),
         "fuzzy_alignment_score": predictions.get("fuzzy_alignment_score"),
         "fuzzy_alignment_label": predictions.get("fuzzy_alignment_label"),
-        "cluster_label"        : predictions.get("cluster_label"),
+        # cluster_label is not a column in the logs table — returned in API
+        # response only (see predictions dict below)
     }
 
     log_res = supabase.table("logs").insert(save_data).execute()
@@ -680,19 +681,34 @@ def simulate():
     before = predict_all(baseline_features)
     after  = predict_all(modified_features)
 
+    deltas = {
+        "performance_score"    : round((after.get("performance_score") or 0) -
+                                       (before.get("performance_score") or 0), 2),
+        "fuzzy_pressure_score" : round((after.get("fuzzy_pressure_score") or 0) -
+                                       (before.get("fuzzy_pressure_score") or 0), 4),
+        "fuzzy_alignment_score": round((after.get("fuzzy_alignment_score") or 0) -
+                                       (before.get("fuzzy_alignment_score") or 0), 4),
+    }
+
+    # Save to simulations table so /api/sim-history works
+    try:
+        supabase.table("simulations").insert({
+            "user_id"      : user_id,
+            "scenario_name": scenario,
+            "changes"      : changes,
+            "before"       : before,
+            "after"        : after,
+            "deltas"       : deltas,
+        }).execute()
+    except Exception:
+        pass  # Non-fatal — still return the result
+
     return jsonify({
         "scenario_name": scenario,
         "changes"      : changes,
         "before"       : before,
         "after"        : after,
-        "deltas": {
-            "performance_score"    : round((after.get("performance_score") or 0) -
-                                           (before.get("performance_score") or 0), 2),
-            "fuzzy_pressure_score" : round((after.get("fuzzy_pressure_score") or 0) -
-                                           (before.get("fuzzy_pressure_score") or 0), 4),
-            "fuzzy_alignment_score": round((after.get("fuzzy_alignment_score") or 0) -
-                                           (before.get("fuzzy_alignment_score") or 0), 4),
-        }
+        "deltas"       : deltas,
     })
 
 
