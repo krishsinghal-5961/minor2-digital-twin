@@ -715,6 +715,449 @@ def health():
     })
 
 
+# ============================================================
+# MISSING ENDPOINTS — paste these into app.py
+# Add them just before the final:
+#   if __name__ == "__main__":
+# ============================================================
+
+from scipy.stats import linregress   # already imported via engineer_features
+
+
+# ============================================================
+# SIMULATION HISTORY
+# ============================================================
+
+@app.route("/api/sim-history", methods=["GET"])
+@login_required
+def sim_history():
+    """
+    Return saved what-if simulations for the logged-in user.
+    Frontend uses GET /api/sim-history → { simulations: [...] }
+    """
+    user_id = session["user_id"]
+    try:
+        res = supabase.table("simulations") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .order("created_at", desc=True) \
+            .execute()
+        return jsonify({"simulations": res.data})
+    except Exception:
+        # Table may not exist yet — return empty list gracefully
+        return jsonify({"simulations": []})
+
+
+# ============================================================
+# DIMINISHING RETURNS
+# Sweeps study hours 1–12 and shows how predicted performance
+# plateaus — mirrors notebook feature importance weighting.
+# Response: { curve: [ {study_hours, performance, marginal_gain}, ... ] }
+# ============================================================
+
+@app.route("/api/diminishing", methods=["GET"])
+@login_required
+def diminishing():
+    """
+    Compute the study-hours vs predicted-performance curve
+    for the current user's latest log.
+    """
+    user_id = session["user_id"]
+
+    logs_res = supabase.table("logs") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .order("logged_at", desc=False) \
+        .execute()
+
+    if not logs_res.data:
+        # No logs yet — return a generic curve using dataset averages
+        baseline_perf = 60.0
+        baseline_study = 5.5
+        baseline_eff   = 0.55
+        baseline_late  = 0.2
+    else:
+        latest = logs_res.data[-1]
+        baseline_perf  = latest.get("performance_score") or 60.0
+        baseline_study = latest.get("study_hours_day")   or 5.5
+        baseline_eff   = (baseline_study * (1 - (latest.get("late_night_ratio") or 0.2))
+                          / (baseline_study + 1))
+        baseline_late  = latest.get("late_night_ratio") or 0.2
+
+    curve = []
+    prev_perf = None
+
+    study = 1.0
+    while study <= 12.01:
+        eff = study * (1 - baseline_late) / (study + 1)
+        d_study = (study - baseline_study) * 3.2
+        d_eff   = (eff   - baseline_eff)   * 28.0
+        perf    = round(min(100, max(0, baseline_perf + d_study + d_eff)), 1)
+        marginal = 0.0 if prev_perf is None else round(perf - prev_perf, 2)
+        curve.append({
+            "study_hours"  : round(study, 1),
+            "performance"  : perf,
+            "marginal_gain": marginal,
+        })
+        prev_perf = perf
+        study = round(study + 0.5, 1)
+
+    return jsonify({"curve": curve})
+
+
+# ============================================================
+# ABLATION STUDY
+# Removes one feature at a time and measures the performance
+# drop — shows which habits matter most for this user.
+# Response: { results: [ {feature, baseline_score, ablated_score, impact}, ... ] }
+# ============================================================
+
+@app.route("/api/ablation", methods=["GET"])
+@login_required
+def ablation():
+    """
+    Feature ablation: zero-out / worst-case each input and
+    measure predicted-performance drop.
+    """
+    user_id = session["user_id"]
+
+    logs_res = supabase.table("logs") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .order("logged_at", desc=False) \
+        .execute()
+
+    if not logs_res.data:
+        return jsonify({"results": []})
+
+    latest   = logs_res.data[-1]
+    baseline = latest.get("performance_score") or 60.0
+
+    b_study  = latest.get("study_hours_day")   or 5.5
+    b_sleep  = latest.get("sleep_hours_day")   or 7.0
+    b_screen = latest.get("screen_time_day")   or 3.0
+    b_late   = latest.get("late_night_ratio")  or 0.2
+    b_eff    = b_study * (1 - b_late) / (b_study + 1)
+    b_dens   = min(1, (latest.get("deadline_count") or 2) / 7.0)
+
+    def ablated_perf(study=None, eff=None, density=None, sleep=None, screen=None, late=None):
+        s  = study   if study   is not None else b_study
+        sl = sleep   if sleep   is not None else b_sleep
+        sc = screen  if screen  is not None else b_screen
+        lt = late    if late    is not None else b_late
+        e  = eff     if eff     is not None else s * (1 - lt) / (s + 1)
+        d  = density if density is not None else b_dens
+
+        d_s  = (s  - b_study)  * 3.2
+        d_e  = (e  - b_eff)    * 28.0
+        d_d  = (b_dens - d)    * 6.0
+        d_sl = (sl - b_sleep)  * 1.5
+        d_sc = (sc - b_screen) * -0.8
+        return round(min(100, max(0, baseline + d_s + d_e + d_d + d_sl + d_sc)), 1)
+
+    features = [
+        {"name": "Study Hours",      "score": ablated_perf(study=0)},
+        {"name": "Study Efficiency", "score": ablated_perf(eff=0)},
+        {"name": "Deadline Density", "score": ablated_perf(density=1.0)},
+        {"name": "Sleep Hours",      "score": ablated_perf(sleep=4.0)},
+        {"name": "Screen Time",      "score": ablated_perf(screen=8.0)},
+        {"name": "Late Night Ratio", "score": ablated_perf(late=1.0)},
+    ]
+
+    results = sorted([
+        {
+            "feature"       : f["name"],
+            "baseline_score": baseline,
+            "ablated_score" : f["score"],
+            "impact"        : round(baseline - f["score"], 1),
+        }
+        for f in features
+    ], key=lambda x: x["impact"], reverse=True)
+
+    return jsonify({"results": results})
+
+
+# ============================================================
+# GOAL SENSITIVITY
+# Re-scores the user's latest data under a hypothetical goal
+# to show what would change if they switched academic target.
+# Response: { goal, performance_score, fuzzy_pressure_score, ... }
+# ============================================================
+
+@app.route("/api/goal-sensitivity", methods=["POST"])
+@login_required
+def goal_sensitivity():
+    """
+    What would my scores look like under a different goal?
+    Body: { goal: 'cgpa_improvement' | 'workload_balance' |
+                  'placement_prep'   | 'skill_building' }
+    """
+    user_id = session["user_id"]
+    body    = request.get_json()
+    new_goal = body.get("goal", "cgpa_improvement")
+
+    logs_res = supabase.table("logs") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .order("logged_at", desc=False) \
+        .execute()
+
+    if not logs_res.data:
+        return jsonify({"error": "No logs found"}), 400
+
+    latest = logs_res.data[-1]
+
+    goal_profiles = {
+        "cgpa_improvement": {"study_mult": 1.0,  "sleep_mult": 0.8,  "expected_study": 6.0},
+        "workload_balance" : {"study_mult": 0.7,  "sleep_mult": 1.2,  "expected_study": 4.5},
+        "placement_prep"  : {"study_mult": 1.2,  "sleep_mult": 0.75, "expected_study": 7.0},
+        "skill_building"  : {"study_mult": 0.9,  "sleep_mult": 0.9,  "expected_study": 5.5},
+    }
+    profile = goal_profiles.get(new_goal, goal_profiles["cgpa_improvement"])
+
+    b_perf   = latest.get("performance_score")     or 60.0
+    b_study  = latest.get("study_hours_day")       or 5.5
+    b_sleep  = latest.get("sleep_hours_day")       or 7.0
+    b_screen = latest.get("screen_time_day")       or 3.0
+    b_late   = latest.get("late_night_ratio")      or 0.2
+    b_eff    = b_study * (1 - b_late) / (b_study + 1)
+    b_dens   = latest.get("deadline_density")      or 0.3
+    b_stab   = latest.get("habit_stability")       or 0.6
+    b_fp     = latest.get("fuzzy_pressure_score")  or 0.5
+    b_fa     = latest.get("fuzzy_alignment_score") or 0.5
+
+    eff_study = b_study * profile["study_mult"]
+    eff_eff   = eff_study * (1 - b_late) / (eff_study + 1)
+    adj_sleep = b_sleep  * profile["sleep_mult"]
+
+    d_s  = (eff_study - b_study) * 3.2
+    d_e  = (eff_eff   - b_eff)   * 28.0
+    adj_perf = round(min(100, max(0, b_perf + d_s + d_e)), 2)
+
+    # Fuzzy pressure with adjusted sleep
+    try:
+        pressure_sim.input["sleep"]     = float(np.clip(adj_sleep, 4, 9))
+        pressure_sim.input["deadlines"] = float(np.clip(b_dens, 0, 1))
+        pressure_sim.input["screen"]    = float(np.clip(b_screen, 0, 8))
+        pressure_sim.input["stability"] = float(np.clip(b_stab, 0, 1))
+        pressure_sim.compute()
+        adj_fp = round(float(pressure_sim.output["pressure"]), 4)
+    except Exception:
+        adj_fp = b_fp
+
+    fp_label = "Low" if adj_fp < 0.35 else ("Medium" if adj_fp < 0.65 else "High")
+
+    # Fuzzy alignment with new mismatch
+    new_mismatch = round(b_study - profile["expected_study"], 3)
+    try:
+        alignment_sim.input["mismatch"] = float(np.clip(new_mismatch, -1, 1))
+        alignment_sim.input["effort"]   = float(np.clip(b_study, 0, 10))
+        alignment_sim.input["p_score"]  = float(np.clip(adj_fp, 0, 1))
+        alignment_sim.compute()
+        adj_fa = round(float(alignment_sim.output["alignment"]), 4)
+    except Exception:
+        adj_fa = b_fa
+
+    fa_label = ("Misaligned" if adj_fa < 0.4
+                else ("Partial" if adj_fa < 0.66 else "Aligned"))
+
+    return jsonify({
+        "goal"                : new_goal,
+        "performance_score"   : adj_perf,
+        "fuzzy_pressure_score": adj_fp,
+        "fuzzy_pressure_label": fp_label,
+        "fuzzy_alignment_score": adj_fa,
+        "fuzzy_alignment_label": fa_label,
+        "delta_performance"   : round(adj_perf - b_perf, 2),
+        "delta_pressure"      : round(adj_fp   - b_fp,   4),
+        "delta_alignment"     : round(adj_fa   - b_fa,   4),
+    })
+
+
+# ============================================================
+# RISK RADAR
+# Computes 6 trend-based risk axes from the user's recent logs.
+# Response: { axes: [...], pressure_momentum, performance_momentum, weeks_used }
+# ============================================================
+
+@app.route("/api/risk-radar", methods=["GET"])
+@login_required
+def risk_radar():
+    """
+    Trend-based early warning radar using slope analysis
+    on the last 5 weeks of data.
+    """
+    user_id = session["user_id"]
+
+    logs_res = supabase.table("logs") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .order("logged_at", desc=False) \
+        .execute()
+
+    logs = logs_res.data
+    if not logs or len(logs) < 3:
+        return jsonify({"axes": None, "message": "Need at least 3 logs for risk radar."})
+
+    recent = logs[-5:]
+
+    def safe_slope(values):
+        if len(values) < 2:
+            return 0.0
+        x = list(range(len(values)))
+        slope, *_ = linregress(x, values)
+        return float(slope)
+
+    def norm(v, reverse, scale):
+        raw = -v if reverse else v
+        return round(min(100, max(0, 50 + raw * scale)), 1)
+
+    perf_slope   = safe_slope([l.get("performance_score")     or 0 for l in recent])
+    press_slope  = safe_slope([l.get("fuzzy_pressure_score")  or 0 for l in recent])
+    align_slope  = safe_slope([l.get("fuzzy_alignment_score") or 0 for l in recent])
+    study_slope  = safe_slope([l.get("study_hours_day")       or 0 for l in recent])
+    sleep_slope  = safe_slope([l.get("sleep_hours_day")       or 0 for l in recent])
+    screen_slope = safe_slope([l.get("screen_time_day")       or 0 for l in recent])
+
+    axes = [
+        {"axis": "Performance Trend", "value": norm(perf_slope,   True,   15), "raw": round(perf_slope,   3)},
+        {"axis": "Pressure Trend",    "value": norm(press_slope,  False,  60), "raw": round(press_slope,  3)},
+        {"axis": "Alignment Trend",   "value": norm(align_slope,  True,   60), "raw": round(align_slope,  3)},
+        {"axis": "Study Consistency", "value": norm(study_slope,  False,   8), "raw": round(study_slope,  3)},
+        {"axis": "Sleep Trend",       "value": norm(sleep_slope,  True,   10), "raw": round(sleep_slope,  3)},
+        {"axis": "Screen Time Trend", "value": norm(screen_slope, False,  10), "raw": round(screen_slope, 3)},
+    ]
+
+    pressure_momentum = ("building"  if press_slope >  0.02
+                         else "releasing" if press_slope < -0.02
+                         else "stable")
+    perf_momentum     = ("rising"    if perf_slope  >  1.0
+                         else "declining" if perf_slope  < -1.0
+                         else "stable")
+
+    return jsonify({
+        "axes"                : axes,
+        "pressure_momentum"   : pressure_momentum,
+        "performance_momentum": perf_momentum,
+        "weeks_used"          : len(recent),
+    })
+
+
+# ============================================================
+# AI EXPLANATION
+# Generates a natural-language explanation of the user's
+# latest predictions using Claude (claude-haiku-4-5).
+# Falls back to a rule-based explanation if API key missing.
+# Response: { explanation: "..." }
+# ============================================================
+
+@app.route("/api/explain", methods=["POST"])
+@login_required
+def explain():
+    """
+    Generate an AI explanation for the user's current predictions.
+    Body: {
+        performance_score, pressure_label, fuzzy_alignment_label,
+        cluster_label, study_hours_day, sleep_hours_day,
+        screen_time_day (all optional — fills from latest log if missing)
+    }
+    """
+    user_id = session["user_id"]
+    body    = request.get_json() or {}
+
+    # Fill from latest log if caller didn't supply values
+    if not body.get("performance_score"):
+        logs_res = supabase.table("logs") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .order("logged_at", desc=False) \
+            .limit(1) \
+            .execute()
+        if logs_res.data:
+            latest = logs_res.data[-1]
+            body.setdefault("performance_score",     latest.get("performance_score", 60))
+            body.setdefault("pressure_label",        latest.get("fuzzy_pressure_label", "Medium"))
+            body.setdefault("fuzzy_alignment_label", latest.get("fuzzy_alignment_label", "Partial"))
+            body.setdefault("cluster_label",         latest.get("cluster_label", "Balanced & Efficient"))
+            body.setdefault("study_hours_day",       latest.get("study_hours_day", 5))
+            body.setdefault("sleep_hours_day",       latest.get("sleep_hours_day", 7))
+            body.setdefault("screen_time_day",       latest.get("screen_time_day", 3))
+
+    perf    = body.get("performance_score", 60)
+    pressure= body.get("pressure_label", "Medium")
+    align   = body.get("fuzzy_alignment_label", "Partial")
+    cluster = body.get("cluster_label", "Balanced & Efficient")
+    study   = body.get("study_hours_day", 5)
+    sleep   = body.get("sleep_hours_day", 7)
+    screen  = body.get("screen_time_day", 3)
+
+    # Try Anthropic API if key is available
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        try:
+            import requests as req
+            prompt = (
+                f"You are an academic coach. A student has the following weekly metrics:\n"
+                f"- Predicted performance score: {perf}/100\n"
+                f"- Workload pressure: {pressure}\n"
+                f"- Goal alignment: {align}\n"
+                f"- Student archetype: {cluster}\n"
+                f"- Study hours/day: {study}h, Sleep: {sleep}h, Screen time: {screen}h\n\n"
+                f"Write a concise 3-sentence personalised insight for this student. "
+                f"Be specific, actionable, and encouraging. "
+                f"End with: 'These are simulations only, not prescriptions or diagnoses.'"
+            )
+            resp = req.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": anthropic_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "claude-haiku-4-5-20251001",
+                    "max_tokens": 300,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                explanation = resp.json()["content"][0]["text"].strip()
+                return jsonify({"explanation": explanation, "source": "claude"})
+        except Exception:
+            pass  # Fall through to rule-based
+
+    # Rule-based fallback (mirrors mock/_mockExplanation in api.js)
+    p_note = {
+        "High"  : "Workload pressure is high — driven by sleep deficit and dense deadlines.",
+        "Medium": "Workload pressure is moderate. Small sleep or screen-time adjustments could help.",
+        "Low"   : "Workload pressure is well managed. Current habits look sustainable.",
+    }.get(pressure, "")
+
+    a_note = {
+        "Aligned"   : "Effort is well-aligned with your stated academic goal.",
+        "Partial"   : "Goal alignment is partial. Increasing focused study hours would strengthen it.",
+        "Misaligned": "There is a mismatch between current effort and your goal. Consider reviewing your study strategy.",
+    }.get(align, "")
+
+    c_note = {
+        "Balanced & Efficient"    : "Your habits are consistent and effort is translating well into predicted outcomes.",
+        "Extracurricular Focused" : "You are active beyond academics — monitor for early burnout signals.",
+        "Overworked & Struggling" : "High effort without adequate recovery detected. Prioritising sleep and reducing screen time is recommended.",
+    }.get(cluster, "")
+
+    explanation = (
+        f"Based on recent activity, predicted performance score is {float(perf):.1f}/100. "
+        f"{p_note} {a_note} "
+        f"Student archetype is \"{cluster}\" — {c_note} "
+        f"These are simulations only, not prescriptions or diagnoses."
+    )
+
+    return jsonify({"explanation": explanation, "source": "rule-based"})
+
+
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
