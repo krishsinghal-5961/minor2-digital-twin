@@ -1108,14 +1108,13 @@ def explain():
     sleep   = body.get("sleep_hours_day", 7)
     screen  = body.get("screen_time_day", 3)
 
-    # Try HuggingFace Inference API (Mistral-7B-Instruct-v0.3)
-    hf_key = os.environ.get("HF_API_KEY")
-    if hf_key:
+    # Try Mistral official API (free tier — mistral-small-latest)
+    mistral_key = os.environ.get("MISTRAL_API_KEY")
+    if mistral_key:
         try:
             import requests as req
-            # Mistral instruct format: [INST] ... [/INST]
             prompt = (
-                f"[INST] You are an academic coach. A student has the following weekly metrics:\n"
+                f"You are an academic coach. A student has the following weekly metrics:\n"
                 f"- Predicted performance score: {perf}/100\n"
                 f"- Workload pressure: {pressure}\n"
                 f"- Goal alignment: {align}\n"
@@ -1123,31 +1122,26 @@ def explain():
                 f"- Study hours/day: {study}h, Sleep: {sleep}h, Screen time: {screen}h\n\n"
                 f"Write a concise 3-sentence personalised insight for this student. "
                 f"Be specific, actionable, and encouraging. "
-                f"End with: 'These are simulations only, not prescriptions or diagnoses.' [/INST]"
+                f"End with: 'These are simulations only, not prescriptions or diagnoses.'"
             )
             resp = req.post(
-                "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
+                "https://api.mistral.ai/v1/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {hf_key}",
+                    "Authorization": f"Bearer {mistral_key}",
                     "Content-Type": "application/json",
                 },
                 json={
-                    "inputs": prompt,
-                    "parameters": {
-                        "max_new_tokens": 300,
-                        "temperature": 0.7,
-                        "return_full_text": False,
-                    },
+                    "model": "mistral-small-latest",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 300,
+                    "temperature": 0.7,
                 },
-                timeout=30,
+                timeout=20,
             )
             if resp.status_code == 200:
-                data = resp.json()
-                # HF returns a list: [{"generated_text": "..."}]
-                if isinstance(data, list) and data:
-                    explanation = data[0].get("generated_text", "").strip()
-                    if explanation:
-                        return jsonify({"explanation": explanation, "source": "mistral-7b"})
+                explanation = resp.json()["choices"][0]["message"]["content"].strip()
+                if explanation:
+                    return jsonify({"explanation": explanation, "source": "mistral-small"})
         except Exception:
             pass  # Fall through to rule-based
 
