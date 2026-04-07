@@ -363,6 +363,9 @@ def predict_all(row_dict: dict) -> dict:
 # AUTH DECORATOR
 # ============================================================
 
+def get_user_id():
+    return request.headers.get("X-User-ID") or session.get("user_id")
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -492,7 +495,7 @@ def log_entry():
     }
     """
     body    = request.get_json()
-    user_id = session["user_id"]
+    user_id = get_user_id()
 
     # Validate required fields
     required = ["study_hours_day","sleep_hours_day","screen_time_day",
@@ -590,7 +593,7 @@ def dashboard():
     Return full dashboard data for logged-in user.
     Latest predictions + all historical logs for charts.
     """
-    user_id = session["user_id"]
+    user_id = get_user_id()
 
     # User info
     user_res = supabase.table("users").select("*").eq("id", user_id).execute()
@@ -662,7 +665,7 @@ def simulate():
         "scenario_name": "Improve Sleep"
     }
     """
-    user_id = session["user_id"]
+    user_id = get_user_id()
     body    = request.get_json()
     changes = body.get("changes", {})
     scenario= body.get("scenario_name", "Scenario")
@@ -736,7 +739,7 @@ def update_settings():
     Body: { goal?, name? }
     """
     body    = request.get_json()
-    user_id = session["user_id"]
+    user_id = get_user_id()
     updates = {}
     if "goal" in body: updates["goal"] = body["goal"]
     if "name" in body: updates["name"] = body["name"]
@@ -780,7 +783,7 @@ def sim_history():
     Return saved what-if simulations for the logged-in user.
     Frontend uses GET /api/sim-history → { simulations: [...] }
     """
-    user_id = session["user_id"]
+    user_id = get_user_id()
     try:
         res = supabase.table("simulations") \
             .select("*") \
@@ -807,7 +810,7 @@ def diminishing():
     Compute the study-hours vs predicted-performance curve
     for the current user's latest log.
     """
-    user_id = session["user_id"]
+    user_id = get_user_id()
 
     logs_res = supabase.table("logs") \
         .select("*") \
@@ -864,7 +867,7 @@ def ablation():
     Feature ablation: zero-out / worst-case each input and
     measure predicted-performance drop.
     """
-    user_id = session["user_id"]
+    user_id = get_user_id()
 
     logs_res = supabase.table("logs") \
         .select("*") \
@@ -937,7 +940,7 @@ def goal_sensitivity():
     Body: { goal: 'cgpa_improvement' | 'workload_balance' |
                   'placement_prep'   | 'skill_building' }
     """
-    user_id = session["user_id"]
+    user_id = get_user_id()
     body    = request.get_json()
     new_goal = body.get("goal", "cgpa_improvement")
 
@@ -1032,7 +1035,7 @@ def risk_radar():
     Trend-based early warning radar using slope analysis
     on the last 5 weeks of data.
     """
-    user_id = session["user_id"]
+    user_id = get_user_id()
 
     logs_res = supabase.table("logs") \
         .select("*") \
@@ -1107,7 +1110,7 @@ def explain():
         screen_time_day (all optional — fills from latest log if missing)
     }
     """
-    user_id = session["user_id"]
+    user_id = get_user_id()
     body    = request.get_json() or {}
 
     # Fill from latest log if caller didn't supply values
