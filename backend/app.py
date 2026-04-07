@@ -469,7 +469,7 @@ def logout():
 @login_required
 def me():
     """Return current logged-in user info."""
-    res  = supabase.table("users").select("*").eq("id", session["user_id"]).execute()
+    res  = supabase.table("users").select("*").eq("id", get_user_id()).execute()
     if not res.data:
         return jsonify({"error": "User not found"}), 404
     user = res.data[0]
@@ -642,7 +642,7 @@ def dashboard():
 @login_required
 def history():
     """Return all logs for trend charts."""
-    user_id  = session["user_id"]
+    user_id  = get_user_id()
     logs_res = supabase.table("logs")\
         .select("*")\
         .eq("user_id", user_id)\
