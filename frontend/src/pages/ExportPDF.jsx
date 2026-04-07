@@ -159,10 +159,10 @@ export default function ExportPDF() {
         {/* Fuzzy Scores */}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
           {[
-            { label:'Workload Pressure Score (Fuzzy Module 1)', score:l.fuzzy_pressure_score,
-              colorFn:s=>s<0.35?'#0D9488':s<0.65?'#D97706':'#DC2626' },
-            { label:'Goal Alignment Score (Fuzzy Module 2)', score:l.fuzzy_alignment_score,
-              colorFn:s=>s<0.4?'#DC2626':s<0.66?'#D97706':'#059669' },
+        { label:'Workload Pressure Score (Fuzzy Module 1)', score:l.fuzzy_pressure_score||0,
+          colorFn:s=>s<0.35?'#0D9488':s<0.65?'#D97706':'#DC2626' },
+        { label:'Goal Alignment Score (Fuzzy Module 2)', score:l.fuzzy_alignment_score||0,
+          colorFn:s=>s<0.4?'#DC2626':s<0.66?'#D97706':'#059669' },
           ].map(f => {
             const pct = Math.round(f.score*100)
             const col = f.colorFn(f.score)
