@@ -52,6 +52,7 @@ export default function History() {
   useEffect(() => {
     Promise.all([api.history(), api.riskRadar()])
       .then(([h,r]) => { setData(h); setRadar(r) })
+      .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
