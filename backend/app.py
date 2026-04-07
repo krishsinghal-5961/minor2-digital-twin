@@ -23,7 +23,9 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key        = os.environ.get("SECRET_KEY", "fallback-dev-key")
 app.permanent_session_lifetime = timedelta(days=7)
-
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+app.config['SESSION_COOKIE_SECURE']   = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
 # ── CORS ──────────────────────────────────────────────────────
 # ALLOWED_ORIGINS env var: comma-separated list of allowed origins.
 # Defaults to localhost:3000 for local dev.
@@ -359,8 +361,11 @@ def predict_all(row_dict: dict) -> dict:
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if "user_id" not in session:
+        # Try header first (cross-origin deployments), then cookie session
+        user_id = request.headers.get("X-User-ID") or session.get("user_id")
+        if not user_id:
             return jsonify({"error": "Not authenticated"}), 401
+        session["user_id"] = user_id  # keep session in sync
         return f(*args, **kwargs)
     return decorated
 
