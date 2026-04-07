@@ -226,13 +226,13 @@ export default function Analytics() {
   useEffect(() => {
     Promise.all([api.diminishing(), api.ablation(), api.riskRadar(), api.dashboard()])
       .then(([d,a,r,dash]) => {
-        setDimData(d.curve)
-        setAblData(a.results)
-        setRadar(r)
-        setLiveData(dash)
+        setDimData(d?.curve ?? [])
+        setAblData(a?.results ?? [])
+        setRadar(r ?? {})
+        setLiveData(dash ?? null)
       })
+      .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
 
   const inflection = dimData?.find((d,i,arr) =>
     i > 0 && d.marginal_gain < arr[i-1].marginal_gain && arr[i-1].marginal_gain > 0
