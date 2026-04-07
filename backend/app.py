@@ -35,7 +35,12 @@ _raw_origins = os.environ.get(
 )
 ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
-CORS(app, supports_credentials=True, origins=ALLOWED_ORIGINS)
+# AFTER
+CORS(app,
+     supports_credentials=True,
+     origins=ALLOWED_ORIGINS,
+     allow_headers=["Content-Type", "X-User-ID"],
+     methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"])
 
 # ── SUPABASE ──────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -361,11 +366,10 @@ def predict_all(row_dict: dict) -> dict:
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        # Try header first (cross-origin deployments), then cookie session
         user_id = request.headers.get("X-User-ID") or session.get("user_id")
         if not user_id:
             return jsonify({"error": "Not authenticated"}), 401
-        session["user_id"] = user_id  # keep session in sync
+        session["user_id"] = user_id
         return f(*args, **kwargs)
     return decorated
 
