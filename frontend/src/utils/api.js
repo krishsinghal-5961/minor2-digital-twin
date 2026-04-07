@@ -8,10 +8,15 @@ const MOCK_MODE = false
 const API_BASE  = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
 async function request(method, path, body) {
+  const stored = localStorage.getItem('adt_user')
+  const user = stored ? JSON.parse(stored) : null
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(user?.id ? { 'X-User-ID': user.id } : {})
+    },
     body: body ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) {
