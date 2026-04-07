@@ -69,14 +69,14 @@ export default function History() {
 
   const chartData = logs.map(l => ({
     name              : fmt(l.logged_at),
-    'Performance'     : +l.performance_score.toFixed(1),
-    'Fuzzy Pressure %': +(l.fuzzy_pressure_score*100).toFixed(1),
-    'Goal Alignment %': +(l.fuzzy_alignment_score*100).toFixed(1),
-    'Study h'         : l.study_hours_day,
-    'Sleep h'         : l.sleep_hours_day,
-    'Screen h'        : l.screen_time_day,
-    'Study Efficiency': +(l.study_efficiency*100).toFixed(1),
-    'Habit Stability' : +(l.habit_stability*100).toFixed(1),
+    'Performance'     : +(l.performance_score||0).toFixed(1),
+    'Fuzzy Pressure %': +((l.fuzzy_pressure_score||0)*100).toFixed(1),
+    'Goal Alignment %': +((l.fuzzy_alignment_score||0)*100).toFixed(1),
+    'Study h'         : l.study_hours_day||0,
+    'Sleep h'         : l.sleep_hours_day||0,
+    'Screen h'        : l.screen_time_day||0,
+    'Study Efficiency': +((l.study_efficiency||0)*100).toFixed(1),
+    'Habit Stability' : +((l.habit_stability||0)*100).toFixed(1),
   }))
 
   const activeTab = TABS.find(t=>t.key===tab)
