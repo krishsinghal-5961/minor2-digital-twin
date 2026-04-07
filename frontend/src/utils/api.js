@@ -4,7 +4,7 @@ import {
 } from '../mock/data'
 
 // ── flip to false + set VITE_API_URL in Vercel when backend is live ──
-const MOCK_MODE = true
+const MOCK_MODE = false
 const API_BASE  = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
 async function request(method, path, body) {
