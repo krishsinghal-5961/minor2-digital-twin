@@ -231,7 +231,7 @@ export default function Analytics() {
         setRadar(r ?? {})
         setLiveData(dash ?? null)
       })
-      .catch(() => {})
+      .catch((err) => { console.error("API error:", err); setError(err.message) })
       .finally(() => setLoading(false))
     }, [])
   const inflection = dimData?.find((d,i,arr) =>
