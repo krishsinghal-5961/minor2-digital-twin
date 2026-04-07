@@ -559,6 +559,9 @@ def log_entry():
         "fuzzy_alignment_label": predictions.get("fuzzy_alignment_label"),
         # cluster_label is not a column in the logs table — returned in API
         # response only (see predictions dict below)
+        "study_efficiency"     : features.get("study_efficiency"),
+        "habit_stability"      : features.get("habit_stability"),
+        "deadline_density"     : features.get("deadline_density"),
     }
 
     log_res = supabase.table("logs").insert(save_data).execute()
@@ -1038,7 +1041,7 @@ def risk_radar():
         .execute()
 
     logs = logs_res.data
-    if not logs or len(logs) < 3:
+    if not logs or len(logs) < 1:
         return jsonify({"axes": None, "message": "Need at least 3 logs for risk radar."})
 
     recent = logs[-5:]
