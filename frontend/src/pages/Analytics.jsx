@@ -233,7 +233,7 @@ export default function Analytics() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-
+    }, [])
   const inflection = dimData?.find((d,i,arr) =>
     i > 0 && d.marginal_gain < arr[i-1].marginal_gain && arr[i-1].marginal_gain > 0
   )
