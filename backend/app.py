@@ -17,6 +17,7 @@ from datetime       import datetime, timedelta
 from supabase       import create_client, Client
 from dotenv         import load_dotenv
 from functools      import wraps
+from scipy.stats    import linregress
 
 load_dotenv()
 
@@ -217,8 +218,6 @@ def engineer_features(logs: list[dict]) -> dict:
     df["prev_deadline_density"] = df["deadline_density"].shift(1).fillna(0)
 
     # ── TEMPORAL FEATURES ─────────────────────────────────────
-    from scipy.stats import linregress
-
     def safe_slope(series):
         s = series.dropna()
         if len(s) < 2: return 0.0
