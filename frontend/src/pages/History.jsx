@@ -47,13 +47,19 @@ export default function History() {
   const [data,    setData]    = useState(null)
   const [radar,   setRadar]   = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState(null)
   const [tab,     setTab]     = useState('performance')
 
   useEffect(() => {
-    Promise.all([api.history(), api.riskRadar()])
-      .then(([h,r]) => { setData(h); setRadar(r) })
-      .catch((err) => { console.error("API error:", err); setError(err.message) })
+    // Fetch independently so a riskRadar 500 doesn't wipe out the logs list
+    api.history()
+      .then(h => setData(h))
+      .catch(err => { console.error('History fetch error:', err); setError(err.message) })
       .finally(() => setLoading(false))
+
+    api.riskRadar()
+      .then(r => setRadar(r))
+      .catch(err => console.error('Risk radar error (non-fatal):', err))
   }, [])
 
   if (loading) return (
