@@ -53,9 +53,14 @@ export default function ExportPDF() {
   const printRef = useRef()
 
   useEffect(() => {
-    Promise.all([api.dashboard(), api.riskRadar()])
-      .then(([d,r]) => { setData(d); setRadar(r) })
+    // Fetch independently so riskRadar failure doesn't block dashboard data
+    api.dashboard()
+      .then(d => setData(d))
       .finally(() => setLoading(false))
+
+    api.riskRadar()
+      .then(r => setRadar(r))
+      .catch(err => console.error('Risk radar error (non-fatal):', err))
   }, [])
 
   const handlePrint = () => window.print()
