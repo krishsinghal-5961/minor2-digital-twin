@@ -222,16 +222,25 @@ export default function Analytics() {
   const [radar,      setRadar]     = useState(null)
   const [liveData,   setLiveData]  = useState(null)
   const [loading,    setLoading]   = useState(true)
+  const [error,      setError]     = useState(null)
 
   useEffect(() => {
-    Promise.all([api.diminishing(), api.ablation(), api.riskRadar(), api.dashboard()])
-      .then(([d,a,r,dash]) => {
-        setDimData(d?.curve ?? [])
-        setAblData(a?.results ?? [])
-        setRadar(r ?? {})
-        setLiveData(dash ?? null)
-      })
-      .catch((err) => { console.error("API error:", err); setError(err.message) })
+    // Fetch each endpoint independently — a failure in one won't blank the others
+    api.diminishing()
+      .then(d => setDimData(d?.curve ?? []))
+      .catch(err => console.error('Diminishing error:', err))
+
+    api.ablation()
+      .then(a => setAblData(a?.results ?? []))
+      .catch(err => console.error('Ablation error:', err))
+
+    api.riskRadar()
+      .then(r => setRadar(r ?? {}))
+      .catch(err => console.error('Risk radar error (non-fatal):', err))
+
+    api.dashboard()
+      .then(dash => setLiveData(dash ?? null))
+      .catch(err => { console.error('Dashboard error:', err); setError(err.message) })
       .finally(() => setLoading(false))
     }, [])
   const inflection = dimData?.find((d,i,arr) =>
