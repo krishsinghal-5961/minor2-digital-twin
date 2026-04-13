@@ -38,7 +38,7 @@ export default function SimHistory() {
 
   useEffect(() => {
     api.simHistory()
-      .then(res => setSims(res.simulations?.length ? res.simulations : MOCK))
+      .then(res => setSims(res.simulations ?? []))
       .finally(() => setLoading(false))
   }, [])
 
