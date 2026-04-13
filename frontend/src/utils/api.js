@@ -65,10 +65,29 @@ export const api = {
     ? Promise.resolve({ explanation: _mockExplanation(data) })
     : request('POST', '/api/explain', data),
 
-  // Screenshot parse (HF vision model in production)
-  parseScreenshot: (base64Image) => MOCK_MODE
-    ? new Promise(r => setTimeout(() => r({ screen_time_day: +(1.5 + Math.random()*3).toFixed(1) }), 1200))
-    : request('POST', '/api/parse-screenshot', { image: base64Image }),
+  // Screenshot parse — Tesseract OCR (server) + Gemini fallback
+  parseScreenshot: (file) => {
+    if (MOCK_MODE) {
+      return new Promise(r => setTimeout(() => r({
+        screen_time_hours: +(1.5 + Math.random() * 3).toFixed(1),
+        confidence: 'medium', raw_text: 'mock', source: 'mock'
+      }), 1200))
+    }
+    const stored = localStorage.getItem('adt_user')
+    const user = stored ? JSON.parse(stored) : null
+    const fd = new FormData()
+    fd.append('screenshot', file)
+    return fetch(`${API_BASE}/api/parse-screenshot`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: user?.id ? { 'X-User-ID': user.id } : {},
+      body: fd,
+    }).then(async res => {
+      const data = await res.json().catch(() => ({ error: res.statusText }))
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`)
+      return data
+    })
+  },
 
   // User feedback — adjusts fuzzy thresholds per user (backend feature)
   // type: 'explanation' | 'prediction' | 'simulation'
