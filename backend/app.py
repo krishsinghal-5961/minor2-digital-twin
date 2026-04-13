@@ -1320,31 +1320,51 @@ def parse_screenshot():
         "If you cannot find a clear total set hours to null and confidence to low."
     )
 
-    try:
-        resp = req.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"gemini-2.0-flash:generateContent?key={gemini_key}",
-            json={
-                "contents": [{
-                    "parts": [
-                        {
-                            "inline_data": {
-                                "mime_type": mime_type,
-                                "data": image_b64,
-                            }
-                        },
-                        {"text": prompt},
-                    ]
-                }],
-                "generationConfig": {"maxOutputTokens": 150, "temperature": 0},
-            },
-            timeout=30,
-        )
-    except Exception as e:
-        return jsonify({"error": f"Gemini request failed: {str(e)}"}), 502
+    # Try flash-lite first (30 RPM free), fall back to flash (15 RPM), retry on 429
+    import time
+    gemini_models = ["gemini-2.0-flash-lite", "gemini-2.0-flash"]
+    resp = None
 
-    if resp.status_code != 200:
-        return jsonify({"error": f"Gemini API returned {resp.status_code}"}), 502
+    for model in gemini_models:
+        for attempt in range(2):
+            try:
+                resp = req.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{model}:generateContent?key={gemini_key}",
+                    json={
+                        "contents": [{
+                            "parts": [
+                                {
+                                    "inline_data": {
+                                        "mime_type": mime_type,
+                                        "data": image_b64,
+                                    }
+                                },
+                                {"text": prompt},
+                            ]
+                        }],
+                        "generationConfig": {"maxOutputTokens": 150, "temperature": 0},
+                    },
+                    timeout=30,
+                )
+            except Exception as e:
+                return jsonify({"error": f"Gemini request failed: {str(e)}"}), 502
+
+            if resp.status_code == 200:
+                break
+            elif resp.status_code == 429:
+                time.sleep(5)
+            else:
+                break
+
+        if resp and resp.status_code == 200:
+            break
+
+    if not resp or resp.status_code != 200:
+        return jsonify({
+            "error": "Screenshot parsing is temporarily unavailable (rate limit). Please type your screen time manually."
+        }), 429
+
 
     raw_text = ""
     try:
