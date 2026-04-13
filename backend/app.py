@@ -1206,6 +1206,296 @@ def explain():
 
 
 
+# ============================================================
+# POST /api/parse-screenshot
+# Accepts a multipart image upload of a Digital Wellbeing /
+# Screen Time screenshot and returns the extracted total
+# daily screen time in hours using Claude vision.
+# Requires ANTHROPIC_API_KEY in environment.
+# Response: { screen_time_hours: float, confidence: str, raw_text: str }
+# ============================================================
+
+@app.route("/api/parse-screenshot", methods=["POST"])
+@login_required
+def parse_screenshot():
+    import base64
+    import re
+    import requests as req
+
+    if "screenshot" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["screenshot"]
+    if not file.filename:
+        return jsonify({"error": "Empty filename"}), 400
+
+    # Read image bytes and encode as base64
+    image_bytes = file.read()
+    if len(image_bytes) > 10 * 1024 * 1024:  # 10 MB limit
+        return jsonify({"error": "Image too large (max 10 MB)"}), 400
+
+    mime_type = file.content_type or "image/jpeg"
+    if mime_type not in ("image/jpeg", "image/png", "image/webp", "image/gif"):
+        mime_type = "image/jpeg"
+
+    image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not anthropic_key:
+        return jsonify({"error": "ANTHROPIC_API_KEY not configured on server"}), 503
+
+    prompt = (
+        "This is a screenshot of a phone's Digital Wellbeing, Screen Time, or similar "
+        "app usage / screen time summary page. "
+        "Your task: extract the TOTAL daily screen time shown on this page. "
+        "It may be labelled 'Screen time', 'Daily average', 'Today', 'Total', etc. "
+        "Convert the value to a decimal number of HOURS (e.g. '3h 24m' → 3.4, '45m' → 0.75). "
+        "Respond ONLY with a JSON object — no markdown, no explanation — in this exact format:\n"
+        '{"hours": <number>, "confidence": "high"|"medium"|"low", "raw": "<original text shown>"}\n'
+        "If you cannot find a clear screen time total, set hours to null and confidence to 'low'."
+    )
+
+    try:
+        resp = req.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": anthropic_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-haiku-4-5",
+                "max_tokens": 200,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": mime_type,
+                                    "data": image_b64,
+                                },
+                            },
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                ],
+            },
+            timeout=30,
+        )
+    except Exception as e:
+        return jsonify({"error": f"Vision API request failed: {str(e)}"}), 502
+
+    if resp.status_code != 200:
+        return jsonify({"error": f"Vision API returned {resp.status_code}"}), 502
+
+    raw_text = ""
+    try:
+        content_blocks = resp.json().get("content", [])
+        raw_text = "".join(b.get("text", "") for b in content_blocks if b.get("type") == "text").strip()
+
+        # Strip possible markdown fences
+        clean = re.sub(r"^```[a-z]*\n?|```$", "", raw_text.strip()).strip()
+        parsed = __import__("json").loads(clean)
+
+        hours = parsed.get("hours")
+        confidence = parsed.get("confidence", "low")
+        raw_label = parsed.get("raw", "")
+
+        if hours is None:
+            return jsonify({
+                "error": "Could not detect screen time in this image",
+                "raw_text": raw_label,
+            }), 422
+
+        # Clamp to sane range
+        hours = round(max(0.0, min(float(hours), 24.0)), 1)
+        return jsonify({
+            "screen_time_hours": hours,
+            "confidence": confidence,
+            "raw_text": raw_label,
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to parse vision response",
+            "raw_text": raw_text,
+        }), 502
+
+
+# ============================================================
+# POST /api/parse-screenshot
+# Accepts a multipart image upload of a Digital Wellbeing /
+# Screen Time screenshot.
+# Strategy: Tesseract OCR first → Gemini flash free-tier fallback.
+# Requires GEMINI_API_KEY in .env only if Tesseract fails.
+# Response: { screen_time_hours: float, confidence: str,
+#             raw_text: str, source: "tesseract"|"gemini" }
+# ============================================================
+
+def _parse_hours_from_text(text: str):
+    """
+    Extract the largest plausible 'total screen time' value from OCR text.
+    Handles patterns like:  4h 23m | 4:23 | 4h | 45m | 2.5h | 2 hr 30 min
+    Returns float hours or None.
+    """
+    import re
+
+    text = text.replace("\n", " ")
+
+    # Pattern: Xh Ym  or  X hr Y min  (capture both parts)
+    hm = re.findall(r'(\d+)\s*h(?:r|rs|our|ours)?\s*(\d+)\s*m(?:in|ins)?', text, re.I)
+    if hm:
+        best = max(float(h) + float(m) / 60 for h, m in hm)
+        return round(best, 1)
+
+    # Pattern: H:MM  (colon-separated, e.g. 4:23)
+    colon = re.findall(r'\b(\d{1,2}):([0-5]\d)\b', text)
+    if colon:
+        best = max(float(h) + float(m) / 60 for h, m in colon)
+        return round(best, 1)
+
+    # Pattern: Xh only (no minutes)
+    h_only = re.findall(r'\b(\d+(?:\.\d+)?)\s*h(?:r|rs|our|ours)?\b', text, re.I)
+    if h_only:
+        return round(max(float(v) for v in h_only), 1)
+
+    # Pattern: Ym only (no hours)
+    m_only = re.findall(r'\b(\d+)\s*m(?:in|ins|inutes?)?\b', text, re.I)
+    if m_only:
+        best_mins = max(int(v) for v in m_only)
+        return round(best_mins / 60, 1)
+
+    return None
+
+
+@app.route("/api/parse-screenshot", methods=["POST"])
+@login_required
+def parse_screenshot():
+    import base64
+    import re
+    import requests as req
+
+    if "screenshot" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["screenshot"]
+    if not file.filename:
+        return jsonify({"error": "Empty filename"}), 400
+
+    image_bytes = file.read()
+    if len(image_bytes) > 10 * 1024 * 1024:
+        return jsonify({"error": "Image too large (max 10 MB)"}), 400
+
+    # ── 1. Try Tesseract OCR ────────────────────────────────
+    tesseract_result = None
+    try:
+        import pytesseract
+        from PIL import Image
+        import io
+
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        ocr_text = pytesseract.image_to_string(img, config="--psm 4")
+        hours = _parse_hours_from_text(ocr_text)
+        if hours is not None and 0 < hours <= 24:
+            tesseract_result = {
+                "screen_time_hours": hours,
+                "confidence": "high" if hours >= 0.5 else "medium",
+                "raw_text": ocr_text.strip()[:300],
+                "source": "tesseract",
+            }
+    except Exception:
+        pass  # Tesseract not installed or failed → fall through
+
+    if tesseract_result:
+        return jsonify(tesseract_result)
+
+    # ── 2. Gemini free-tier fallback ────────────────────────
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    if not gemini_key:
+        return jsonify({
+            "error": (
+                "Tesseract OCR is not available on this server and "
+                "GEMINI_API_KEY is not configured. "
+                "Please type your screen time manually."
+            )
+        }), 503
+
+    mime_type = file.content_type or "image/jpeg"
+    if mime_type not in ("image/jpeg", "image/png", "image/webp"):
+        mime_type = "image/jpeg"
+
+    image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+
+    prompt = (
+        "This is a screenshot of a phone's Digital Wellbeing, Screen Time, "
+        "or similar app-usage summary page. "
+        "Extract the TOTAL daily screen time shown. "
+        "Convert to decimal hours (e.g. '3h 24m' → 3.4, '45m' → 0.75). "
+        "Reply ONLY with valid JSON — no markdown — like: "
+        '{"hours": 3.4, "confidence": "high", "raw": "3h 24m"} '
+        "If you cannot find a clear total set hours to null and confidence to low."
+    )
+
+    try:
+        resp = req.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"gemini-1.5-flash:generateContent?key={gemini_key}",
+            json={
+                "contents": [{
+                    "parts": [
+                        {
+                            "inline_data": {
+                                "mime_type": mime_type,
+                                "data": image_b64,
+                            }
+                        },
+                        {"text": prompt},
+                    ]
+                }],
+                "generationConfig": {"maxOutputTokens": 150, "temperature": 0},
+            },
+            timeout=30,
+        )
+    except Exception as e:
+        return jsonify({"error": f"Gemini request failed: {str(e)}"}), 502
+
+    if resp.status_code != 200:
+        return jsonify({"error": f"Gemini API returned {resp.status_code}"}), 502
+
+    raw_text = ""
+    try:
+        candidates = resp.json().get("candidates", [])
+        parts = candidates[0]["content"]["parts"]
+        raw_text = "".join(p.get("text", "") for p in parts).strip()
+
+        clean = re.sub(r"^```[a-z]*\n?|```$", "", raw_text).strip()
+        parsed = __import__("json").loads(clean)
+
+        hours = parsed.get("hours")
+        if hours is None:
+            return jsonify({
+                "error": "Could not detect screen time in this image. Please type it manually.",
+                "raw_text": parsed.get("raw", ""),
+            }), 422
+
+        hours = round(max(0.0, min(float(hours), 24.0)), 1)
+        return jsonify({
+            "screen_time_hours": hours,
+            "confidence": parsed.get("confidence", "medium"),
+            "raw_text": parsed.get("raw", ""),
+            "source": "gemini",
+        })
+
+    except Exception:
+        return jsonify({
+            "error": "Failed to read the screenshot. Please type your screen time manually.",
+            "raw_text": raw_text,
+        }), 502
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
