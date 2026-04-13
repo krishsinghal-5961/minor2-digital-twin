@@ -253,6 +253,28 @@ export default function Analytics() {
   const gridStroke  = dark ? 'rgba(91,79,232,0.08)' : 'rgba(91,79,232,0.06)'
 
   if (loading) return <Spinner/>
+  const logCount = liveData?.logs?.length ?? 0
+  if (logCount < 3) return (
+    <div style={{display:'flex', flexDirection:'column', gap:24}}>
+      <div>
+        <p className="section-label">Analytics</p>
+        <h1 style={{fontFamily:'Syne,sans-serif', fontWeight:800, fontSize:'1.75rem', color:'var(--color-paper)', marginTop:4}}>
+          Deep Insights
+        </h1>
+      </div>
+      <div className="card" style={{textAlign:'center', padding:'4rem 2rem', display:'flex', flexDirection:'column', alignItems:'center', gap:12}}>
+        <p style={{fontFamily:'Syne,sans-serif', fontWeight:700, fontSize:'1.1rem', color:'var(--color-paper)'}}>
+          Almost there — {3 - logCount} more log{3 - logCount !== 1 ? 's' : ''} needed
+        </p>
+        <p style={{fontFamily:'DM Sans,sans-serif', fontSize:'0.85rem', color:'var(--color-muted)', maxWidth:340, lineHeight:1.6}}>
+          Analytics unlock after 3 log entries. This ensures trends and comparisons are meaningful.
+        </p>
+        <button onClick={() => navigate('/app/log')} className="btn-primary" style={{marginTop:8}}>
+          Add a log entry
+        </button>
+      </div>
+    </div>
+  )
 
   return (
     <div style={{display:'flex', flexDirection:'column', gap:24}}>
