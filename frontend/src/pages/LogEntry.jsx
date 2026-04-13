@@ -76,10 +76,18 @@ export default function LogEntry() {
   const handleScreenshot = async (e) => {
     const file = e.target.files[0]
     if (!file) return
-    setScreenshot(file.name); setParsing(true)
-    await new Promise(r => setTimeout(r, 1200))
-    setField('screen_time_day', +(1.5 + Math.random()*3).toFixed(1))
-    setParsing(false)
+    setScreenshot(file.name)
+    setParsing(true)
+    setError('')
+    try {
+      const result = await api.parseScreenshot(file)
+      setField('screen_time_day', result.screen_time_hours)
+    } catch (err) {
+      setError(err.message || 'Could not read screenshot. Please type your screen time manually.')
+      setScreenshot(null)
+    } finally {
+      setParsing(false)
+    }
   }
 
   const handle = async (e) => {
@@ -181,12 +189,11 @@ export default function LogEntry() {
           {screenshot && !parsing && (
             <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',
               background:'rgba(5,150,105,0.06)',border:'1px solid rgba(5,150,105,0.2)',
-              borderRadius:8,marginBottom:12}}>
-              <CheckCircle size={12} style={{color:'#059669'}}/>
+              borderRadius:8,marginBottom:12}}>\n              <CheckCircle size={12} style={{color:'#059669'}}/>
               <p style={{fontFamily:'JetBrains Mono,monospace',fontSize:'0.7rem',color:'#059669',flex:1}}>
-                Screen time auto-filled from screenshot: {form.screen_time_day}h
+                Screen time auto-filled from screenshot: <strong>{form.screen_time_day}h</strong>
               </p>
-              <button type="button" onClick={()=>setScreenshot(null)}
+              <button type="button" onClick={()=>{setScreenshot(null); setField('screen_time_day',3)}}
                 style={{background:'none',border:'none',cursor:'pointer',color:'var(--color-muted)'}}>
                 <X size={12}/>
               </button>
