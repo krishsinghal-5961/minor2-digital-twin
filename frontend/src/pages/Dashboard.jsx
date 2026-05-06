@@ -89,7 +89,7 @@ export default function Dashboard() {
         <div>
           <p className="section-label">Dashboard</p>
           <h1 style={{fontFamily:'Syne,sans-serif', fontWeight:800, fontSize:'1.75rem', color:'var(--color-paper)', lineHeight:1.1, marginTop:2}}>
-            Hey, {user?.name?.split(' ')[0]} 👋
+            Hey, {user?.name?.split(' ')[0]}
           </h1>
           <p style={{fontFamily:'DM Sans,sans-serif', fontSize:'0.8rem', color:'var(--color-muted)', marginTop:4}}>
             {data.total_logs} log{data.total_logs !== 1 ? 's' : ''} recorded · predictions update on each log
