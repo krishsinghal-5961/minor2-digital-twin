@@ -206,13 +206,18 @@ def engineer_features(logs: list[dict]) -> dict:
     ).round(3)
 
     # Habit stability (rolling std inverted)
-    if len(df) >= 3:
+    # Habit stability (rolling std inverted)
+    global_std = df["study_hours_day"].std()
+    if len(df) < 3:
+        df["habit_stability"] = 0.7
+    elif global_std < 0.1:
+        # All values nearly identical = perfectly stable
+        df["habit_stability"] = 1.0
+    else:
         df["habit_stability"] = (
             1 - df["study_hours_day"].rolling(3, min_periods=1).std() /
-            (df["study_hours_day"].std() + 1e-6)
+            (global_std + 1e-6)
         ).clip(0, 1).round(3)
-    else:
-        df["habit_stability"] = 0.5
 
     # prev_deadline_density
     df["prev_deadline_density"] = df["deadline_density"].shift(1).fillna(0)
