@@ -559,8 +559,7 @@ def log_entry():
         "fuzzy_pressure_label" : predictions.get("fuzzy_pressure_label"),
         "fuzzy_alignment_score": predictions.get("fuzzy_alignment_score"),
         "fuzzy_alignment_label": predictions.get("fuzzy_alignment_label"),
-        # cluster_label is not a column in the logs table — returned in API
-        # response only (see predictions dict below)
+        "cluster_label"        : predictions.get("cluster_label"),
         "study_efficiency"     : features.get("study_efficiency"),
         "habit_stability"      : features.get("habit_stability"),
         "deadline_density"     : features.get("deadline_density"),
@@ -1122,21 +1121,28 @@ def explain():
             .execute()
         if logs_res.data:
             latest = logs_res.data[-1]
-            body.setdefault("performance_score",     latest.get("performance_score", 60))
-            body.setdefault("pressure_label",        latest.get("fuzzy_pressure_label", "Medium"))
-            body.setdefault("fuzzy_alignment_label", latest.get("fuzzy_alignment_label", "Partial"))
-            body.setdefault("cluster_label",         latest.get("cluster_label", "Balanced & Efficient"))
-            body.setdefault("study_hours_day",       latest.get("study_hours_day", 5))
-            body.setdefault("sleep_hours_day",       latest.get("sleep_hours_day", 7))
-            body.setdefault("screen_time_day",       latest.get("screen_time_day", 3))
+            if not body.get("performance_score"):
+                body["performance_score"]     = latest.get("performance_score") or 60
+            if not body.get("pressure_label"):
+                body["pressure_label"]        = latest.get("fuzzy_pressure_label") or "Medium"
+            if not body.get("fuzzy_alignment_label"):
+                body["fuzzy_alignment_label"] = latest.get("fuzzy_alignment_label") or "Partial"
+            if not body.get("cluster_label"):
+                body["cluster_label"]         = latest.get("cluster_label") or "Balanced & Efficient"
+            if not body.get("study_hours_day"):
+                body["study_hours_day"]       = latest.get("study_hours_day") or 5
+            if not body.get("sleep_hours_day"):
+                body["sleep_hours_day"]       = latest.get("sleep_hours_day") or 7
+            if not body.get("screen_time_day"):
+                body["screen_time_day"]       = latest.get("screen_time_day") or 3
 
-    perf    = body.get("performance_score", 60)
-    pressure= body.get("pressure_label", "Medium")
-    align   = body.get("fuzzy_alignment_label", "Partial")
-    cluster = body.get("cluster_label", "Balanced & Efficient")
-    study   = body.get("study_hours_day", 5)
-    sleep   = body.get("sleep_hours_day", 7)
-    screen  = body.get("screen_time_day", 3)
+    perf     = body.get("performance_score") or 60
+    pressure = body.get("pressure_label") or "Medium"
+    align    = body.get("fuzzy_alignment_label") or "Partial"
+    cluster  = body.get("cluster_label") or "Balanced & Efficient"
+    study    = body.get("study_hours_day") or 5
+    sleep    = body.get("sleep_hours_day") or 7
+    screen   = body.get("screen_time_day") or 3
 
     # Try Mistral official API (free tier — mistral-small-latest)
     mistral_key = os.environ.get("MISTRAL_API_KEY")
